@@ -1,7 +1,7 @@
 ## 环境检测
 检测日期：2026-09-26
 # 1.Java
-检查目的：检查目的：确认JDK已安装，并满足项目要求版本。
+检查目的：确认JDK已安装，并满足项目要求版本。
 执行命令：java -version
 输出：openjdk 26.0.2 2026-07-21
 OpenJDK Runtime Environment Zulu26.32+13-CA (build 26.0.2+10)
