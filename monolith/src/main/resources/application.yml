@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: monolith
+
+server:
+  port: 8080
