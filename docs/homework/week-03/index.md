@@ -56,3 +56,20 @@ GET http://localhost:8080/actuator/health
 ```json
 {"groups":["liveness","readiness"],"status":"UP"}
 ```
+
+## 测试命令与结果
+
+测试命令：
+
+```bash
+./mvnw test
+```
+
+测试结果：
+
+```text
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+测试说明：`MonolithApplicationTests` 使用 `@SpringBootTest` 加载完整的 Spring 应用上下文，`contextLoads` 测试通过，说明启动类、`application.yml`、Spring Web MVC、Actuator 和相关组件均能被 Spring 容器正常扫描和加载。
