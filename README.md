@@ -88,6 +88,53 @@ flowchart TD
 
 支付和物流采用模拟方式，目的是突出微服务架构、服务协作和分布式问题，而不是实现完整商业电商平台。
 
+## 工程运行说明
+
+### 环境要求
+
+- JDK 25
+- Maven 3.9 及以上；也可以直接使用项目自带的 Maven Wrapper（`mvnw`、`mvnw.cmd`）
+
+### 运行步骤
+
+Git Bash / macOS / Linux：
+
+```bash
+cd monolith
+./mvnw test
+./mvnw spring-boot:run
+```
+
+Windows PowerShell：
+
+```powershell
+cd monolith
+.\mvnw.cmd test
+.\mvnw.cmd spring-boot:run
+```
+
+应用默认端口为 `8080`。
+
+### 访问地址
+
+- 问候接口：`GET http://localhost:8080/api/hello`
+- 健康检查：`GET http://localhost:8080/actuator/health`
+
+### 当前尚未实现的业务能力
+
+当前阶段只完成可运行的单体工程骨架，尚未实现以下业务能力：
+
+- 用户注册、登录与权限控制
+- 教材发布、搜索和详情接口
+- 商品库存锁定与释放
+- 购物车、订单和多卖家拆单
+- 模拟支付、支付回调和超时取消
+- 发货、物流状态和确认收货
+- 评价与信誉
+- 通知和后台管理
+- 数据库、Repository、Service 和完整 REST API
+- 真实支付、真实物流、消息队列和分布式事务
+
 ## 后续演进方向
 
 | 演进方向 | 后续内容 |
