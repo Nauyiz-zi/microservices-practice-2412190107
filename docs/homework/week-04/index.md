@@ -36,9 +36,13 @@
 校验失败时不创建订单，也不扣减库存。
 
 ### 运行命令
+```text
 cd D:\microservices\microservices-practice-2412190107\monolith
 .\mvnw.cmd test
+```
 ### 运行结果
 预期结果：
+```text
 Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
+```
