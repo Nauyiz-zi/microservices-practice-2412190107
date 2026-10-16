@@ -168,3 +168,16 @@
 Seller 1 ---- N Textbook
 Textbook 1 ---- N TradeOrder
 Buyer 1 ---- N TradeOrder
+```
+本周代码中使用 sellerId 和 buyerId 保存用户标识，暂不单独实现用户实体。
+
+### 7.3 Service 中实现的业务规则
+
+订单创建时必须满足以下规则：
+- 教材必须存在；
+- 教材必须处于上架状态；
+- 购买数量必须大于 0；
+- 教材库存必须大于或等于购买数量。
+
+如果任意条件不满足，Service 抛出业务异常，Controller 返回 HTTP 400，并且不能创建订单。
+订单创建成功后，系统立即扣减教材库存，并将订单状态设置为 PENDING_PAYMENT。
