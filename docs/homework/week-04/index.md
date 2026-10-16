@@ -56,21 +56,24 @@ com.zjgsu.zy
 ├── model
 ├── repository
 └── service
-'''
+```
 
-REST 接口
-方法	路径	说明
-POST	/api/textbooks	创建教材
-GET	/api/textbooks	查询在售教材
-GET	/api/textbooks/{id}	查询教材详情
-POST	/api/orders	创建订单
-GET	/api/orders/{id}	查询订单
+### REST 接口
+|方法|路径|说明|
+|---|---|---|
+|POST|/api/textbooks|创建教材|
+|GET|/api/textbooks|查询在售教材|
+|GET|/api/textbooks/{id}|查询教材详情|
+|POST|/api/orders|创建订单|
+|GET|/api/orders/{id}|查询订单|
 
-
-实现原则
+### 实现原则
 Controller 只负责接收 HTTP 请求和返回 HTTP 响应。
 业务规则、库存扣减和订单创建全部放在 Service 中。
 数据访问通过 Spring Data JPA Repository 完成。
-启动命令
+
+### 启动命令
+```text
 cd D:\microservices\microservices-practice-2412190107\monolith
 .\mvnw.cmd spring-boot:run
+```
