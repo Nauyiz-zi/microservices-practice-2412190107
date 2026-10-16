@@ -77,3 +77,43 @@ Controller 只负责接收 HTTP 请求和返回 HTTP 响应。
 cd D:\microservices\microservices-practice-2412190107\monolith
 .\mvnw.cmd spring-boot:run
 ```
+
+## 四、数据库持久化
+### 持久化方案
+项目使用：
+- MySQL 作为本地开发数据库；
+- Spring Data JPA 作为数据访问框架；
+- H2 作为自动化测试数据库；
+- TextbookRepository 和 TradeOrderRepository 负责数据访问。
+
+### 数据表
+项目包含：
+- textbooks：教材表；
+- trade_orders：订单表。
+
+### 测试数据准备
+测试类中的 @BeforeEach 会先清空订单和教材数据，再创建测试教材，因此测试可以重复执行。
+
+### 测试命令
+```text
+cd D:\microservices\microservices-practice-2412190107\monolith
+.\mvnw.cmd test
+```
+
+## 五、测试与验证
+本周分别验证以下内容：
+1. Repository 能够保存和查询教材；
+2. Service 能够创建订单并扣减库存；
+3. Service 能够拒绝库存不足的订单；
+4. API 能够正常创建教材和查询教材；
+5. API 能够对库存不足返回 HTTP 400。
+
+### 验证结果
+```text
+Repository 保存和查询测试通过
+Service 库存扣减测试通过
+Service 库存不足规则测试通过
+API 创建和查询测试通过
+API 错误响应测试通过
+BUILD SUCCESS
+```
