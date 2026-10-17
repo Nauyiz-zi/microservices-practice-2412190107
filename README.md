@@ -183,11 +183,13 @@ CREATE DATABASE campus_textbook
 monolith/src/main/resources/application.yml
 ```
 中的数据库用户名和密码：
+```text
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/campus_textbook?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
-    password: ******
+    password: ${MYSQL_PASSWORD}
+```
 应用启动后，JPA 会自动创建 textbooks 和 trade_orders 表。
 
 ### curl 示例
@@ -213,9 +215,17 @@ curl -X POST http://localhost:8080/api/textbooks \
 
 ```text
 curl "http://localhost:8080/api/textbooks?keyword=Java"
+```
+
 查询全部在售教材：
+
+```text
 curl "http://localhost:8080/api/textbooks"
+```
+
 创建订单时，将 textbookId 替换为创建教材接口返回的实际 ID：
+
+```text
 curl -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
   -d '{
