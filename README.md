@@ -147,6 +147,107 @@ cd monolith
 | 监控运维 | 健康检查、日志聚合、指标监控、链路追踪和告警 |
 | 部署发布 | Docker Compose、配置管理、CI/CD，后续可扩展到 Kubernetes |
 
+## 单体业务实现
+
+完成了教材发布、教材查询、订单创建和订单查询流程。
+
+### 新增接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/textbooks` | 创建教材 |
+| GET | `/api/textbooks?keyword=Java` | 查询教材 |
+| GET | `/api/textbooks/{id}` | 查询教材详情 |
+| POST | `/api/orders` | 创建订单 |
+| GET | `/api/orders/{id}` | 查询订单详情 |
+
+### 启动应用
+
+Windows PowerShell：
+
+```powershell
+cd D:\microservices\microservices-practice-2412190107\monolith
+.\mvnw.cmd spring-boot:run
+```
+
+### MySQL 安装和建库
+安装本地 MySQL 8.x 后执行：
+```text
+CREATE DATABASE campus_textbook
+    DEFAULT CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+```
+
+然后修改：
+```text
+monolith/src/main/resources/application.yml
+```
+中的数据库用户名和密码：
+```text
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/campus_textbook?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: ${MYSQL_PASSWORD}
+```
+应用启动后，JPA 会自动创建 textbooks 和 trade_orders 表。
+
+### curl 示例
+
+创建教材：
+
+```text
+curl -X POST http://localhost:8080/api/textbooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Java 程序设计",
+    "isbn": "9787300000010",
+    "author": "张三",
+    "publisher": "高等教育出版社",
+    "conditionDescription": "九成新",
+    "price": 29.90,
+    "stock": 3,
+    "sellerId": 1001
+  }'
+```
+
+查询教材：
+
+```text
+curl "http://localhost:8080/api/textbooks?keyword=Java"
+```
+
+查询全部在售教材：
+
+```text
+curl "http://localhost:8080/api/textbooks"
+```
+
+创建订单时，将 textbookId 替换为创建教材接口返回的实际 ID：
+
+```text
+curl -X POST http://localhost:8080/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "buyerId": 2001,
+    "textbookId": 1,
+    "quantity": 1
+  }'
+```
+
+查询订单：
+
+```text
+curl "http://localhost:8080/api/orders/1"
+```
+
+测试命令
+```text
+cd D:\microservices\microservices-practice-2412190107\monolith
+.\mvnw.cmd test
+```
+测试使用 H2 内存数据库，不依赖本地 MySQL。每次测试执行前会自动清理并准备测试数据，因此可以重复执行。
+
 ## 课程信息
 
 - 课程：微服务开发与实践
