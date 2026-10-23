@@ -1,7 +1,10 @@
 .idea/
 .vscode/
 *.iml
+
 **/target/
 *.log
+
 .env
 .env.*
+!.env.example
