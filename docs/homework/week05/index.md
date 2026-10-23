@@ -368,3 +368,42 @@ sellerId	1001	1001
 ID 和书名、ISBN、价格、库存等关键字段均保持不变，
 说明 MySQL 数据持久化验证成功。
 ```
+
+## 六、命名数据卷的作用
+
+本项目使用名为 mysql_data 的 Docker 命名数据卷：
+```text
+volumes:
+  mysql_data:
+```
+
+并挂载到 MySQL 容器的数据目录：
+```text
+- mysql_data:/var/lib/mysql
+```
+
+命名数据卷的作用是将 MySQL 数据从容器生命周期中独立出来：
+- 删除容器时，数据库文件不会随容器删除；
+- 重新创建容器时，可以继续使用原来的数据库文件；
+- 数据卷由 Docker 统一管理，不依赖项目目录中的临时容器文件系统；
+- 执行 docker compose down 会删除容器和网络，但默认保留数据卷；
+- 执行 docker compose down -v 会同时删除数据卷和数据库数据。
+
+因此，本次持久化验证必须使用：
+```text
+docker compose down
+```
+
+不能使用：
+```text
+docker compose down -v
+```
+
+## 七、本周结论
+本周完成了 Spring Boot 单体应用和 MySQL 的容器化：
+1. 使用多阶段 Dockerfile 构建了 campus-textbook:week05 镜像；
+2. 使用 Compose 编排了 app 和 mysql 服务；
+3. 通过健康检查保证应用等待数据库可用后启动；
+4. 通过 Postman 验证了健康接口、教材创建接口和教材查询接口；
+5. 通过命名数据卷验证了容器删除重建后的数据持久化；
+6. 应用、数据库、网络和数据卷均可以通过 Compose 重复启动。
