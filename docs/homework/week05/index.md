@@ -270,3 +270,101 @@ GET http://localhost:8080/api/textbooks/4
 ```
 
 查询结果中的 ID、书名、ISBN、价格和库存与创建接口返回的数据一致。
+
+## 五、数据持久化验证
+
+### 5.1 创建并记录数据
+
+首先通过 Postman 创建教材，记录返回的教材 ID：
+```text
+教材ID：4
+书名：计算机组成原理
+ISBN：9787300000502
+价格：25.50
+库存：3
+卖家ID：1001
+```
+
+### 5.2 删除容器
+
+在仓库根目录执行：
+```text
+docker compose down
+```
+
+本次操作没有使用：
+```text
+docker compose down -v
+```
+
+因此只删除了容器和网络，没有删除 MySQL 命名数据卷。
+
+### 5.3 检查数据卷
+```text
+docker volume ls
+```
+实际结果：
+campus-textbook-week05_mysql_data 仍然存在
+
+### 5.4 重新启动容器
+```text
+docker compose up -d
+```
+
+检查状态：
+```text
+docker compose ps
+```
+
+等待 mysql 显示 healthy，并确认 app 正常运行。
+
+再次检查应用健康状态：
+```text
+GET http://localhost:8080/actuator/health
+```
+
+实际结果：
+```text
+200 OK，status 为 UP
+```
+
+### 5.5 再次查询原记录
+
+在 Postman 中重新发送：
+```text
+GET http://localhost:8080/api/textbooks/4
+```
+
+实际响应：
+```text
+ {
+    "id": 4,
+    "title": "计算机组成原理",
+    "isbn": "9787300000502",
+    "author": "唐朔飞",
+    "publisher": "高等教育出版社",
+    "conditionDescription": "九成新",
+    "price": 25.50,
+    "stock": 3,
+    "sellerId": 1001,
+    "listed": true,
+    "createdAt": "2026-10-23T09:47:52.651732"
+}
+```
+
+重建容器前后对比：
+字段	重建前	重建后
+id	4	4
+title	计算机组成原理 计算机组成原理
+isbn	9787300000502	9787300000502
+price	25.50	25.50
+stock	3	3
+sellerId	1001	1001
+
+
+验证结论：
+```text
+容器删除并重新创建后，教材记录仍然可以通过原 ID 查询，
+ID 和书名、ISBN、价格、库存等关键字段均保持不变，
+说明 MySQL 数据持久化验证成功。
+```
