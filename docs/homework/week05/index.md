@@ -71,3 +71,86 @@ OpenJDK 64-Bit Server VM Temurin-25.0.4.1+1 (build 25.0.4.1+1-LTS, mixed mode, s
 ```
 
 说明：该镜像能够在没有本机 Maven 和 Java 参与构建的情况下完成编译和运行。
+
+
+## 三、Compose 编排配置与启动
+
+### 3.1 编排配置
+
+根目录中的 compose.yaml 定义了两个服务：
+- mysql：使用 mysql:8.4.11 镜像；
+- app：从 ./monolith 构建 Spring Boot 应用。
+两个服务加入同一个 campus_net 网络。
+
+应用通过下面的地址连接数据库：
+```text
+jdbc:mysql://mysql:3306/campus_textbook
+```
+这里的 mysql 是 Compose 中的服务名，不是 localhost。
+
+MySQL 使用命名数据卷：
+```text
+volumes:
+  - mysql_data:/var/lib/mysql
+```
+
+MySQL 配置了健康检查，应用通过以下配置等待 MySQL 健康后再启动：
+```text
+depends_on:
+  mysql:
+    condition: service_healthy
+```
+
+### 3.2 环境变量
+
+复制环境变量模板：
+```text
+Copy-Item .env.example .env
+```
+
+在 .env 中配置本地使用的数据库密码：
+```text
+APP_PORT=8080
+MYSQL_PORT=3307
+DB_NAME=campus_textbook
+DB_USER=campus_app
+DB_PASSWORD=<实际应用数据库密码>
+DB_ROOT_PASSWORD=<实际root密码>
+```
+.env 只用于本地运行，不提交到 GitHub；.env.example 用于说明配置格式，可以提交。
+
+### 3.3 编排配置检查
+```text
+docker compose config --quiet
+```
+
+实际结果：
+命令无错误输出，Compose 配置检查通过
+
+### 3.4 启动命令
+```text
+docker compose up -d --build
+```
+
+查看服务状态：
+```text
+docker compose ps
+```
+实际结果：
+```text
+NAME                             IMAGE                    COMMAND                   SERVICE   CREATED          STATUS                    PORTS
+campus-textbook-week05-app-1     campus-textbook:week05   "java -jar /app/app.…"   app       14 seconds ago   Up 8 seconds              127.0.0.1:8080->8080/tcp
+campus-textbook-week05-mysql-1   mysql:8.4.11             "docker-entrypoint.s…"   mysql     14 seconds ago   Up 14 seconds (healthy)   127.0.0.1:3307->3306/tcp
+```
+
+预期状态：
+- mysql：healthy
+- app：running
+
+查看应用日志：
+```text
+docker compose logs --tail=100 app
+```
+
+实际结果：
+日志出现 Started MonolithApplication
