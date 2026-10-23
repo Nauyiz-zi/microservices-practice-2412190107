@@ -248,6 +248,251 @@ cd D:\microservices\microservices-practice-2412190107\monolith
 ```
 测试使用 H2 内存数据库，不依赖本地 MySQL。每次测试执行前会自动清理并准备测试数据，因此可以重复执行。
 
+## Docker 容器化运行
+
+### 环境要求
+
+安装并启动 Docker Desktop，使用 Linux 容器模式。
+
+检查 Docker 和 Compose：
+
+```powershell
+docker version
+docker compose version
+```
+
+构建在容器内完成，不需要本机 Maven 或 Java。
+
+以下命令均从仓库根目录开始执行：
+
+```powershell
+cd D:\microservices\microservices-practice-2412190107
+```
+
+### 复制配置模板
+
+首次运行时，从模板创建本地配置；已有 `.env` 时不覆盖：
+
+```powershell
+if (!(Test-Path .env)) {
+    Copy-Item .env.example .env
+}
+```
+
+打开配置文件：
+
+```powershell
+notepad .env
+```
+
+修改并保存以下配置：
+
+```dotenv
+APP_PORT=8080
+MYSQL_PORT=3307
+DB_NAME=campus_textbook
+DB_USER=campus_app
+DB_PASSWORD=请替换为自己的应用数据库密码
+DB_ROOT_PASSWORD=请替换为自己的数据库管理员密码
+```
+
+### 构建镜像
+
+在仓库根目录执行：
+
+```powershell
+docker build -t campus-textbook:week05 ./monolith
+```
+
+检查构建结果：
+
+```powershell
+docker image ls campus-textbook
+```
+
+### 一键启动
+
+先检查编排配置：
+
+```powershell
+docker compose config --quiet
+```
+
+构建并后台启动：
+
+```powershell
+docker compose up -d --build
+```
+
+如果本机已有 Spring Boot 占用 8080，请先停止它，或者修改 `.env` 中的 `APP_PORT`。
+
+### 查看状态和日志
+
+查看容器状态：
+
+```powershell
+docker compose ps
+```
+
+MySQL 应显示 `healthy`，应用应处于运行状态。
+
+查看应用日志：
+
+```powershell
+docker compose logs --tail=100 app
+```
+
+查看数据库日志：
+
+```powershell
+docker compose logs --tail=100 mysql
+```
+
+持续查看应用日志：
+
+```powershell
+docker compose logs -f app
+```
+
+按 `Ctrl+C` 仅退出日志查看，不会停止后台容器。
+
+### 验证健康接口
+
+以下示例按 `APP_PORT=8080` 编写；修改端口后，请同步调整访问地址。
+
+```powershell
+$baseUrl = "http://localhost:8080"
+curl.exe -i "$baseUrl/actuator/health"
+```
+
+预期返回 HTTP 200，响应包含：
+
+```json
+{
+  "status": "UP"
+}
+```
+
+如果应用尚未启动完成，稍后重试。
+
+### 业务 API 示例一：创建教材
+
+下面命令使用随机测试 ISBN，避免重复执行时与同一卖家的已有 ISBN 冲突。该 ISBN 仅用于接口测试。
+
+```powershell
+$baseUrl = "http://localhost:8080"
+
+$body = @{
+    "title": "计算机组成原理",
+    "isbn": "9787300000502",
+    "author": "唐朔飞",
+    "publisher": "高等教育出版社",
+    "conditionDescription": "九成新",
+    "price": 25.50,
+    "stock": 3,
+    "sellerId": 1001
+} | ConvertTo-Json
+
+$response = Invoke-WebRequest `
+    -Uri "$baseUrl/api/textbooks" `
+    -Method Post `
+    -ContentType "application/json; charset=utf-8" `
+    -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) `
+    -UseBasicParsing
+
+$response.StatusCode
+$response.Content
+
+$created = $response.Content | ConvertFrom-Json
+$textbookId = $created.id
+
+Write-Output "创建的教材ID：$textbookId"
+```
+
+预期状态码为 `201`，响应包含教材 ID、书名、ISBN、价格和库存。
+
+### 业务 API 示例二：查询教材详情
+
+在执行创建示例后的同一个 PowerShell 窗口中运行：
+
+```powershell
+curl.exe -i "$baseUrl/api/textbooks/$textbookId"
+```
+
+预期返回 HTTP 200，ID、书名、ISBN、价格和库存与创建结果一致。
+
+如果新开了终端，请先设置地址和真实教材 ID，例如：
+
+```powershell
+$baseUrl = "http://localhost:8080"
+$textbookId = Read-Host "请输入之前创建的教材ID"
+
+curl.exe -i "$baseUrl/api/textbooks/$textbookId"
+```
+
+### 业务 API 示例三：查询在售教材列表
+
+```powershell
+curl.exe -i "http://localhost:8080/api/textbooks"
+```
+
+预期返回 HTTP 200 和 JSON 数组。没有教材时返回空数组。
+
+### 停止与再次启动
+
+仅停止容器，保留容器、网络和数据卷：
+
+```powershell
+docker compose stop
+```
+
+再次启动已停止的容器：
+
+```powershell
+docker compose start
+```
+
+停止并删除容器及项目网络，但保留命名数据卷：
+
+```powershell
+docker compose down
+```
+
+重新创建并启动容器：
+
+```powershell
+docker compose up -d
+```
+
+### 数据持久化验证
+
+在创建教材后，保留实际教材 ID，在同一个终端中执行：
+
+```powershell
+docker compose down
+docker volume ls
+docker compose up -d
+docker compose ps
+```
+
+等待应用健康接口返回 HTTP 200：
+
+```powershell
+curl.exe -i "$baseUrl/actuator/health"
+```
+
+然后查询原来的教材，不要重新创建：
+
+```powershell
+curl.exe -i "$baseUrl/api/textbooks/$textbookId"
+```
+
+确认记录仍存在，且 ID、书名、ISBN、价格和库存与容器重建前一致。
+
+MySQL 数据通过命名数据卷 `mysql_data` 挂载到容器的 `/var/lib/mysql`，因此数据独立于容器保存。
+
+**持久化验证不要执行 `docker compose down -v`，该命令会删除数据卷及其中的数据库数据。**
+
 ## 课程信息
 
 - 课程：微服务开发与实践
