@@ -154,3 +154,119 @@ docker compose logs --tail=100 app
 
 实际结果：
 日志出现 Started MonolithApplication
+
+## 四、业务 API 验证
+
+本次使用 Postman 通过容器映射端口访问应用。
+
+应用访问地址：
+```text
+http://localhost:8080
+```
+
+### 4.1 健康接口
+
+请求：
+```text
+GET http://localhost:8080/actuator/health
+```
+
+实际响应状态：
+```text
+200 OK
+```
+
+实际响应：
+```text
+{
+    "groups": [
+        "liveness",
+        "readiness"
+    ],
+    "status": "UP"
+}
+```
+
+### 4.2 创建教材
+
+请求：
+```text
+POST http://localhost:8080/api/textbooks
+```
+
+Body 选择：
+```text
+raw → JSON
+```
+
+请求内容：
+```text
+{
+  "title": "计算机组成原理",
+  "isbn": "9787300000502",
+  "author": "唐朔飞",
+  "publisher": "高等教育出版社",
+  "conditionDescription": "九成新",
+  "price": 25.50,
+  "stock": 3,
+  "sellerId": 1001
+}
+```
+
+实际响应状态：
+```text
+201 Created
+```
+
+实际返回的教材 ID：
+```text
+4
+```
+
+实际响应关键字段：
+```text
+{
+    "id": 4,
+    "title": "计算机组成原理",
+    "isbn": "9787300000502",
+    "author": "唐朔飞",
+    "publisher": "高等教育出版社",
+    "conditionDescription": "九成新",
+    "price": 25.50,
+    "stock": 3,
+    "sellerId": 1001,
+    "listed": true,
+    "createdAt": "2026-10-23T09:47:52.65173168"
+}
+```
+
+### 4.3 查询教材
+
+使用创建接口返回的实际 ID：
+```text
+GET http://localhost:8080/api/textbooks/4
+```
+
+实际响应状态：
+```text
+200 OK
+```
+
+实际查询结果：
+```text
+{
+    "id": 4,
+    "title": "计算机组成原理",
+    "isbn": "9787300000502",
+    "author": "唐朔飞",
+    "publisher": "高等教育出版社",
+    "conditionDescription": "九成新",
+    "price": 25.50,
+    "stock": 3,
+    "sellerId": 1001,
+    "listed": true,
+    "createdAt": "2026-10-23T09:47:52.651732"
+}
+```
+
+查询结果中的 ID、书名、ISBN、价格和库存与创建接口返回的数据一致。
