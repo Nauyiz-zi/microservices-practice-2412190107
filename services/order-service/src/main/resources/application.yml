@@ -1,0 +1,36 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/campus_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${DB_USERNAME:order_app}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  sql:
+    init:
+      mode: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+clients:
+  user:
+    base-url: ${USER_SERVICE_URL:http://localhost:8081}
+  textbook:
+    base-url: ${TEXTBOOK_SERVICE_URL:http://localhost:8082}
+  connect-timeout-ms: ${HTTP_CONNECT_TIMEOUT_MS:2000}
+  read-timeout-ms: ${HTTP_READ_TIMEOUT_MS:3000}
+

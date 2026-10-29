@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{textbookUrl}}/api/textbooks/{{textbookId}}"
+method: GET
+order: 9000

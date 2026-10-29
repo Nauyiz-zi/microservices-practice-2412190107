@@ -1,0 +1,30 @@
+$kind: http-request
+url: "{{orderUrl}}/api/orders"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "requestId": "{{requestId}}",
+      "buyerId": "{{buyerId}}",
+      "textbookId": "{{textbookId}}",
+      "quantity": 1
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.collectionVariables.get("requestId")) {
+        pm.collectionVariables.set("requestId", pm.variables.replaceIn("{{$guid}}"));
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 201", function () { pm.response.to.have.status(201); });
+      if (pm.response.code === 201) {
+        const body = pm.response.json();
+        pm.collectionVariables.set("orderId", String(body.id));
+      }
+    language: text/javascript
+order: 7000

@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{orderUrl}}/api/orders"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "requestId": "{{$guid}}",
+      "buyerId": 999999999,
+      "textbookId": "{{textbookId}}",
+      "quantity": 1
+    }
+order: 10000

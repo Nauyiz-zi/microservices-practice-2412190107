@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: a13904fa-a6d0-4471-8689-9b6bc7b33c4b
+
+localResources:
+  collections:
+    - ../校园二手教材平台 Week06 Step02
+
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ../postman/collections/校园二手教材平台 Week06 Step02: 839ec28f-e88b-41ee-9224-adc91a259456

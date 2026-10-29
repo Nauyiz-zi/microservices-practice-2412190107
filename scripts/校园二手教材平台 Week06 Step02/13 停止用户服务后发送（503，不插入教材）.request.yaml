@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{textbookUrl}}/api/textbooks"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "title": "下游不可用测试",
+      "isbn": "fail-{{$timestamp}}",
+      "author": "字远",
+      "conditionDescription": "九成新",
+      "price": 10,
+      "stock": 1,
+      "sellerId": "{{sellerId}}"
+    }
+order: 13000

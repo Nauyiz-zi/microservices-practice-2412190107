@@ -1,0 +1,31 @@
+$kind: http-request
+url: "{{textbookUrl}}/api/textbooks"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "title": "计算机组成原理",
+      "isbn": "{{testIsbn}}",
+      "author": "唐朔飞",
+      "publisher": "高等教育出版社",
+      "conditionDescription": "九成新",
+      "price": 25.5,
+      "stock": 3,
+      "sellerId": "{{sellerId}}"
+    }
+scripts:
+  - type: beforeRequest
+    code: pm.variables.set("testIsbn", "test-" + pm.variables.replaceIn("{{$guid}}").replace(/-/g, "").slice(0, 20));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 201", function () { pm.response.to.have.status(201); });
+      if (pm.response.code === 201) {
+        const body = pm.response.json();
+        pm.collectionVariables.set("textbookId", String(body.id));
+      }
+    language: text/javascript
+order: 6000

@@ -1,0 +1,11 @@
+$kind: collection
+description: 先启动三个微服务，依次执行请求；健康检查、HTTP协作、幂等和失败场景。失败场景需人工确认本地无新增记录。
+variables:
+  userUrl: http://localhost:8081
+  textbookUrl: http://localhost:8082
+  orderUrl: http://localhost:8083
+  sellerId: ""
+  buyerId: ""
+  textbookId: ""
+  orderId: ""
+  requestId: ""

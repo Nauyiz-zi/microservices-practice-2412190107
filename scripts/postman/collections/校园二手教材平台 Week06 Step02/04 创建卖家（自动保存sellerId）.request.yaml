@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{userUrl}}/api/users"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "studentNo": "seller-{{$timestamp}}",
+      "displayName": "教材卖家"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("HTTP 201", function () { pm.response.to.have.status(201); });
+      if (pm.response.code === 201) {
+        const body = pm.response.json();
+        pm.collectionVariables.set("sellerId", String(body.id));
+      }
+    language: text/javascript
+order: 4000

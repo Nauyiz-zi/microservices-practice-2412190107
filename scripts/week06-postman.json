@@ -1,0 +1,347 @@
+{
+  "info": {
+    "name": "校园二手教材平台 Week06 Step02",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "先启动三个微服务，依次执行请求；健康检查、HTTP协作、幂等和失败场景。失败场景需人工确认本地无新增记录。"
+  },
+  "variable": [
+    {
+      "key": "userUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "textbookUrl",
+      "value": "http://localhost:8082",
+      "type": "string"
+    },
+    {
+      "key": "orderUrl",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "sellerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "buyerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "textbookId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requestId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 用户服务健康",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{userUrl}}/actuator/health"
+      }
+    },
+    {
+      "name": "02 教材服务健康",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{textbookUrl}}/actuator/health"
+      }
+    },
+    {
+      "name": "03 订单服务健康",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{orderUrl}}/actuator/health"
+      }
+    },
+    {
+      "name": "04 创建卖家（自动保存sellerId）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{userUrl}}/api/users",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"studentNo\": \"seller-{{$timestamp}}\",\n  \"displayName\": \"教材卖家\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set(\"sellerId\", String(body.id));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 创建买家（自动保存buyerId）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{userUrl}}/api/users",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"studentNo\": \"buyer-{{$timestamp}}\",\n  \"displayName\": \"教材买家\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set(\"buyerId\", String(body.id));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 发布教材（真实HTTP校验卖家）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{textbookUrl}}/api/textbooks",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"计算机组成原理\",\n  \"isbn\": \"{{testIsbn}}\",\n  \"author\": \"唐朔飞\",\n  \"publisher\": \"高等教育出版社\",\n  \"conditionDescription\": \"九成新\",\n  \"price\": 25.5,\n  \"stock\": 3,\n  \"sellerId\": \"{{sellerId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.variables.set(\"testIsbn\", \"test-\" + pm.variables.replaceIn(\"{{$guid}}\").replace(/-/g, \"\").slice(0, 20));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set(\"textbookId\", String(body.id));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 创建订单（同请求重复发送不重复扣库存）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{orderUrl}}/api/orders",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestId\": \"{{requestId}}\",\n  \"buyerId\": \"{{buyerId}}\",\n  \"textbookId\": \"{{textbookId}}\",\n  \"quantity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.collectionVariables.get(\"requestId\")) {",
+              "  pm.collectionVariables.set(\"requestId\", pm.variables.replaceIn(\"{{$guid}}\"));",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set(\"orderId\", String(body.id));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 查询订单",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{orderUrl}}/api/orders/{{orderId}}"
+      }
+    },
+    {
+      "name": "09 查询库存（首次下单后应为2）",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{textbookUrl}}/api/textbooks/{{textbookId}}"
+      }
+    },
+    {
+      "name": "10 买家不存在（422，无本地订单）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{orderUrl}}/api/orders",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"buyerId\": 999999999,\n  \"textbookId\": \"{{textbookId}}\",\n  \"quantity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "11 教材不存在（422，无本地订单）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{orderUrl}}/api/orders",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"buyerId\": \"{{buyerId}}\",\n  \"textbookId\": 999999999,\n  \"quantity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "12 库存不足（409，无本地订单）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{orderUrl}}/api/orders",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"buyerId\": \"{{buyerId}}\",\n  \"textbookId\": \"{{textbookId}}\",\n  \"quantity\": 999\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "13 停止用户服务后发送（503，不插入教材）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{textbookUrl}}/api/textbooks",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"下游不可用测试\",\n  \"isbn\": \"fail-{{$timestamp}}\",\n  \"author\": \"字远\",\n  \"conditionDescription\": \"九成新\",\n  \"price\": 10,\n  \"stock\": 1,\n  \"sellerId\": \"{{sellerId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
