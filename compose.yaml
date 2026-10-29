@@ -1,69 +1,153 @@
-name: campus-textbook-week05
+name: campus-textbook-week06
+
+x-mysql-common: &mysql-common
+  image: mysql:8.4.11
+  restart: unless-stopped
+  command:
+    - --character-set-server=utf8mb4
+    - --collation-server=utf8mb4_unicode_ci
+  networks:
+    - campus_net
+  healthcheck:
+    test:
+      - CMD-SHELL
+      - >-
+        MYSQL_PWD="$${MYSQL_PASSWORD}"
+        mysql --protocol=TCP
+        -h 127.0.0.1
+        -u"$${MYSQL_USER}"
+        --database="$${MYSQL_DATABASE}"
+        --silent --skip-column-names
+        --execute="SELECT 1" > /dev/null 2>&1
+    interval: 10s
+    timeout: 5s
+    retries: 18
+    start_period: 60s
+
+x-app-common: &app-common
+  restart: unless-stopped
+  networks:
+    - campus_net
+  healthcheck:
+    test:
+      - CMD
+      - curl
+      - --fail
+      - --silent
+      - --show-error
+      - --max-time
+      - "4"
+      - http://127.0.0.1:8080/actuator/health
+    interval: 10s
+    timeout: 5s
+    retries: 18
+    start_period: 60s
 
 services:
-  mysql:
-    image: mysql:8.4.11
-    restart: unless-stopped
-
+  user-db:
+    <<: *mysql-common
     environment:
-      MYSQL_DATABASE: ${DB_NAME:?Set DB_NAME in .env}
-      MYSQL_USER: ${DB_USER:?Set DB_USER in .env}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: campus_user
+      MYSQL_USER: user_app
+      MYSQL_PASSWORD: ${W06_USER_DB_PASSWORD:?Set W06_USER_DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${W06_USER_DB_ROOT_PASSWORD:?Set W06_USER_DB_ROOT_PASSWORD in .env}
       TZ: Asia/Shanghai
-
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-
-    ports:
-      - "127.0.0.1:${MYSQL_PORT:-3307}:3306"
-
     volumes:
-      - mysql_data:/var/lib/mysql
+      - user_mysql_data:/var/lib/mysql
 
-    networks:
-      - campus_net
+  textbook-db:
+    <<: *mysql-common
+    environment:
+      MYSQL_DATABASE: campus_textbook
+      MYSQL_USER: textbook_app
+      MYSQL_PASSWORD: ${W06_TEXTBOOK_DB_PASSWORD:?Set W06_TEXTBOOK_DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${W06_TEXTBOOK_DB_ROOT_PASSWORD:?Set W06_TEXTBOOK_DB_ROOT_PASSWORD in .env}
+      TZ: Asia/Shanghai
+    volumes:
+      - textbook_mysql_data:/var/lib/mysql
 
-    healthcheck:
-      test: 'MYSQL_PWD="$${MYSQL_PASSWORD}" mysql --protocol=TCP -h 127.0.0.1 -u"$${MYSQL_USER}" --database="$${MYSQL_DATABASE}" --silent --skip-column-names --execute="SELECT 1" > /dev/null 2>&1'
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 40s
+  order-db:
+    <<: *mysql-common
+    environment:
+      MYSQL_DATABASE: campus_order
+      MYSQL_USER: order_app
+      MYSQL_PASSWORD: ${W06_ORDER_DB_PASSWORD:?Set W06_ORDER_DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${W06_ORDER_DB_ROOT_PASSWORD:?Set W06_ORDER_DB_ROOT_PASSWORD in .env}
+      TZ: Asia/Shanghai
+    volumes:
+      - order_mysql_data:/var/lib/mysql
 
-  app:
-    image: campus-textbook:week05
-
+  user-service:
+    <<: *app-common
+    image: campus-user-service:week06
     build:
-      context: ./monolith
+      context: ./services/user-service
       dockerfile: Dockerfile
-
-    restart: unless-stopped
-
     depends_on:
-      mysql:
+      user-db:
         condition: service_healthy
-
     environment:
       SERVER_PORT: "8080"
-      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${DB_NAME}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
-      SPRING_DATASOURCE_USERNAME: ${DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_JPA_OPEN_IN_VIEW: "false"
-      SPRING_SQL_INIT_MODE: never
+      DB_URL: "jdbc:mysql://user-db:3306/campus_user?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+      DB_USERNAME: user_app
+      DB_PASSWORD: ${W06_USER_DB_PASSWORD:?Set W06_USER_DB_PASSWORD in .env}
       TZ: Asia/Shanghai
-
     ports:
-      - "127.0.0.1:${APP_PORT:-8080}:8080"
+      - "127.0.0.1:${W06_USER_PORT:-8081}:8080"
 
-    networks:
-      - campus_net
+  textbook-service:
+    <<: *app-common
+    image: campus-textbook-service:week06
+    build:
+      context: ./services/textbook-service
+      dockerfile: Dockerfile
+    depends_on:
+      textbook-db:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: "8080"
+      DB_URL: "jdbc:mysql://textbook-db:3306/campus_textbook?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+      DB_USERNAME: textbook_app
+      DB_PASSWORD: ${W06_TEXTBOOK_DB_PASSWORD:?Set W06_TEXTBOOK_DB_PASSWORD in .env}
+      USER_SERVICE_URL: http://user-service:8080
+      HTTP_CONNECT_TIMEOUT_MS: "2000"
+      HTTP_READ_TIMEOUT_MS: "3000"
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${W06_TEXTBOOK_PORT:-8082}:8080"
+
+  order-service:
+    <<: *app-common
+    image: campus-order-service:week06
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    depends_on:
+      order-db:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      textbook-service:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: "8080"
+      DB_URL: "jdbc:mysql://order-db:3306/campus_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+      DB_USERNAME: order_app
+      DB_PASSWORD: ${W06_ORDER_DB_PASSWORD:?Set W06_ORDER_DB_PASSWORD in .env}
+      USER_SERVICE_URL: http://user-service:8080
+      TEXTBOOK_SERVICE_URL: http://textbook-service:8080
+      HTTP_CONNECT_TIMEOUT_MS: "2000"
+      HTTP_READ_TIMEOUT_MS: "3000"
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${W06_ORDER_PORT:-8083}:8080"
 
 volumes:
-  mysql_data:
+  user_mysql_data:
+  textbook_mysql_data:
+  order_mysql_data:
 
 networks:
   campus_net:
