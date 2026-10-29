@@ -400,3 +400,222 @@ SELECT * FROM campus_order.trade_orders ORDER BY id DESC;
 依赖失败时返回明确错误，不跳过校验。
 请求标识和库存操作记录用于支持同一业务请求的安全重试，
 但不能代替完整的分布式事务、自动补偿和对账机制。
+
+## 三. 本地编排
+
+### 1. 实现思路
+
+在仓库根目录使用 `compose.yaml` 统一编排三个微服务和三个独立的 MySQL 数据库：
+
+| 容器 | 本机访问端口 | 作用 |
+| --- | ---: | --- |
+| user-service | 8081 | 用户服务 |
+| textbook-service | 8082 | 教材和库存服务 |
+| order-service | 8083 | 订单服务 |
+| user-db | 不映射本机端口 | 用户服务数据库 |
+| textbook-db | 不映射本机端口 | 教材服务数据库 |
+| order-db | 不映射本机端口 | 订单服务数据库 |
+
+每个微服务只使用自己的数据库、账号和数据卷：
+
+- `user-service` 使用 `user-db` 和 `user_mysql_data`；
+- `textbook-service` 使用 `textbook-db` 和 `textbook_mysql_data`；
+- `order-service` 使用 `order-db` 和 `order_mysql_data`。
+
+容器之间通过 Compose 服务名通信，不使用 `localhost`：
+
+```text
+textbook-service -> http://user-service:8080
+order-service -> http://user-service:8080
+order-service -> http://textbook-service:8080
+```
+
+数据库连接地址也使用 Compose 服务名：
+
+```text
+jdbc:mysql://user-db:3306/campus_user
+jdbc:mysql://textbook-db:3306/campus_textbook
+jdbc:mysql://order-db:3306/campus_order
+```
+
+应用端口映射到本机后，Postman 使用以下地址访问：
+
+```text
+http://localhost:8081
+http://localhost:8082
+http://localhost:8083
+```
+
+Compose 中为 MySQL 和三个应用配置了健康检查，并通过
+`depends_on` 的 `condition: service_healthy` 控制启动顺序。
+实际密码通过 `.env` 提供，`.env` 不提交到 GitHub，
+只提交 `.env.example` 模板。
+
+### 2. 配置检查和启动命令
+
+在仓库根目录执行：
+
+```powershell
+Set-Location D:\microservices\microservices-practice-2412190107
+```
+
+检查 Compose 配置：
+
+```powershell
+docker compose config --quiet
+```
+
+构建镜像并启动全部服务：
+
+```powershell
+docker compose up -d --build
+```
+
+查看容器状态：
+
+```powershell
+docker compose ps
+```
+
+查看服务日志：
+
+```powershell
+docker compose logs --tail=100 user-service textbook-service order-service
+```
+
+停止并删除容器但保留数据卷：
+
+```powershell
+docker compose down
+```
+
+重新启动：
+
+```powershell
+docker compose up -d
+```
+
+本次验证没有使用：
+
+```powershell
+docker compose down -v
+```
+
+因为该命令会删除命名数据卷中的数据库数据。
+
+### 3. 启动结果
+
+配置检查结果：
+
+```text
+docker compose config --quiet
+结果：【无错误输出】
+```
+
+镜像构建和启动结果：
+
+```text
+docker compose up -d --build
+结果：【成功】
+```
+
+容器状态记录：
+
+| 容器 | 实际状态 | 健康状态 |
+| --- | --- | --- |
+| user-db | 【running】 | 【healthy】 |
+| textbook-db | 【running】 | 【healthy】 |
+| order-db | 【running】 | 【healthy】 |
+| user-service | 【running】 | 【healthy】 |
+| textbook-service | 【running】 | 【healthy】 |
+| order-service | 【running】 | 【healthy】 |
+
+### 4. 健康接口验证
+
+使用 Postman 或命令行请求：
+
+```powershell
+curl.exe --noproxy "*" -i http://localhost:8081/actuator/health
+curl.exe --noproxy "*" -i http://localhost:8082/actuator/health
+curl.exe --noproxy "*" -i http://localhost:8083/actuator/health
+```
+
+实际结果：
+
+| 服务 | 请求地址 | 状态码 | 响应状态 | 验证结果 |
+| --- | --- | ---: | --- | --- |
+| user-service | `/actuator/health` | 【200】 | 【UP】 | 【通过】 |
+| textbook-service | `/actuator/health` | 【200】 | 【UP】 | 【通过】 |
+| order-service | `/actuator/health` | 【200】 | 【UP】 | 【通过】 |
+
+三个服务正常时，应返回 HTTP `200`，响应内容包含：
+
+```json
+{"status":"UP"}
+```
+
+### 5. 业务 API 验证
+
+通过 Postman 在容器启动后执行以下业务流程：
+
+1. 创建卖家和买家；
+2. 创建教材；
+3. 创建订单；
+4. 查询订单；
+5. 查询教材并检查库存变化。
+
+实际结果记录：
+
+| 操作 | 请求地址 | 实际状态码 | 结果 |
+| --- | --- | ---: | --- |
+| 创建用户 | `POST http://localhost:8081/api/users` | 【201】 | sellerId = 【1】，buyerId = 【2】 |
+| 创建教材 | `POST http://localhost:8082/api/textbooks` | 【201】 | textbookId = 【1】，初始库存 = 【3】 |
+| 创建订单 | `POST http://localhost:8083/api/orders` | 【201】 | orderId = 【1】，状态 = 【200】 |
+| 查询订单 | `GET http://localhost:8083/api/orders/{id}` | 【200】 | 返回订单信息【一致】 |
+| 查询教材 | `GET http://localhost:8082/api/textbooks/{id}` | 【200】 | 库存由【3】变为【2】 |
+
+订单服务能够通过 `user-service` 和 `textbook-service` 的 Compose 服务名完成跨服务调用，说明容器网络配置有效。
+
+### 6. 数据卷持久化验证
+
+先通过业务 API 创建一条订单，并记录订单 ID、教材 ID、
+订单状态和教材库存。
+
+然后执行：
+
+```powershell
+docker compose down
+docker compose up -d
+docker compose ps
+```
+
+等待应用健康后，重新查询原来的订单和教材：
+
+```text
+GET http://localhost:8083/api/orders/1
+GET http://localhost:8082/api/textbooks/1
+```
+
+验证结果：
+
+| 数据项 | 重建前 | 重建后 | 是否一致 |
+| --- | --- | --- | --- |
+| 订单 ID | 【1】 | 【1】 | 【是】 |
+| 订单状态 | 【PENDING_PAYMENT】 | 【PENDING_PAYMENT】 | 【是】 |
+| 买家 ID | 【2】 | 【2】 | 【是】 |
+| 教材 ID | 【1】 | 【1】 | 【是】 |
+| 购买数量 | 【1】 | 【1】 | 【是】 |
+| 教材库存 | 【2】 | 【2】 | 【是】 |
+
+命名数据卷分别挂载到各 MySQL 容器的
+`/var/lib/mysql` 目录。`docker compose down` 只删除容器，
+不会删除命名数据卷，因此重新创建容器后，原有订单、教材、
+用户和库存数据仍然可以查询。
+
+### 3.7 完成结果和关键结论
+
+本地编排完成了三个微服务、三个独立数据库、共享 Compose 网络、
+健康检查、启动依赖和命名数据卷配置。验证时通过本机端口访问健康接口和业务 API，
+容器内部通过服务名完成用户校验、教材查询、库存扣减和订单创建。
+执行 `docker compose down` 后重新启动，原订单和教材数据仍可查询，
+说明命名数据卷实现了数据库持久化。
