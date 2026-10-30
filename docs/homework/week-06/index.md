@@ -619,3 +619,202 @@ GET http://localhost:8082/api/textbooks/1
 容器内部通过服务名完成用户校验、教材查询、库存扣减和订单创建。
 执行 `docker compose down` 后重新启动，原订单和教材数据仍可查询，
 说明命名数据卷实现了数据库持久化。
+
+## 四. 验证
+
+### 1. 实现思路
+
+验证分为健康检查、正常业务流程和失败场景三个部分。
+
+1. 使用 `scripts/smoke-test.sh` 请求三个服务的健康接口，检查
+   HTTP 状态码是否为200，以及响应中的status是否为UP。
+2. 使用Postman执行创建卖家、创建买家、发布教材、创建订单、
+   查询订单和查询教材的完整流程，验证服务间HTTP协作。
+3. 选择“买家不存在”作为失败场景，检查订单服务是否明确拒绝请求。
+4. 对比失败请求前后的订单数、教材库存和库存操作记录数，
+   确认是否产生不应出现的业务写入。
+
+### 2. 运行命令
+
+打开Docker Desktop并等待引擎启动。
+在Git Bash中进入仓库根目录：
+
+```bash
+cd /d/microservices/microservices-practice-2412190107
+```
+
+启动服务并查看状态：
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+执行健康检查：
+
+```bash
+bash scripts/smoke-test.sh
+echo $?
+```
+
+脚本至少调用以下接口：
+
+```text
+GET http://localhost:8081/actuator/health
+GET http://localhost:8082/actuator/health
+GET http://localhost:8083/actuator/health
+```
+
+全部检查通过时退出码为0；任意检查失败时退出码为1。
+
+实际结果：
+
+| 服务 | HTTP状态码 | 响应status | 结果 |
+| --- | --- | --- | --- |
+| user-service | 【200】 | 【up】 | 【通过】 |
+| textbook-service | 【200】 | 【up】 | 【通过】 |
+| order-service | 【200】 | 【up】 | 【通过】 |
+
+脚本最终输出：【[CHECK] user-service: http://localhost:8081/actuator/health
+[PASS] user-service HTTP 200, status=UP
+[CHECK] textbook-service: http://localhost:8082/actuator/health
+[PASS] textbook-service HTTP 200, status=UP
+[CHECK] order-service: http://localhost:8083/actuator/health
+[PASS] order-service HTTP 200, status=UP
+[PASS] All three services are healthy】。
+
+脚本退出码：【0】。
+
+### 3. 正常跨服务业务验证
+
+通过Postman依次执行以下请求：
+
+| 操作 | 方法与地址 | 请求数据摘要 | 实际结果 |
+| --- | --- | --- | --- |
+| 创建卖家 | POST http://localhost:8081/api/users | 唯一studentNo、displayName | HTTP【201】，sellerId【4】 |
+| 创建买家 | POST http://localhost:8081/api/users | 唯一studentNo、displayName | HTTP【201】，buyerId【5】 |
+| 发布教材 | POST http://localhost:8082/api/textbooks | 实际sellerId，价格25.50，库存3及其他必填字段 | HTTP【201】，textbookId【3】 |
+| 创建订单 | POST http://localhost:8083/api/orders | 新requestId、实际buyerId、textbookId、quantity=1 | HTTP【201】，orderId【2】，status【PENDING_PAYMENT】 |
+| 查询订单 | GET http://localhost:8083/api/orders/2 | 本次实际订单ID | HTTP【200】，订单信息【一致】 |
+| 查询教材 | GET http://localhost:8082/api/textbooks/3 | 本次实际教材ID | HTTP【200】，库存【2】 |
+
+本次订单请求如下：
+
+```json
+{
+  "requestId": "{{$guid}}",
+  "buyerId": 5,
+  "textbookId": 3,
+  "quantity": 1
+}
+```
+
+实际发送的requestId：【256f6a7d-ba14-4795-8a2e-bb7806a8a5d2】。
+
+服务调用过程：
+
+1. 教材服务调用用户服务，校验卖家后保存教材。
+2. 订单服务调用用户服务，校验买家。
+3. 订单服务调用教材服务，查询教材并请求扣减库存。
+4. 远程操作成功后，订单服务保存本地订单。
+
+数据变化记录：
+
+| 数据项 | 下单前 | 下单后 |
+| --- | --- | --- |
+| 订单记录数 | 【1】 | 【2】 |
+| 本次教材库存 | 【3】 | 【2】 |
+| 库存操作记录数 | 【1】 | 【2】 |
+
+验证结论：【订单新增1条、库存减少1、
+库存操作记录新增1条，查询订单与创建响应一致】。
+
+### 4. 依赖资源不存在验证
+
+先确认测试买家不存在：
+
+```text
+GET http://localhost:8081/api/users/999999999
+```
+
+实际状态码：【404】。
+
+记录订单数、教材库存和库存操作记录数后，提交新的订单请求：
+
+```text
+POST http://localhost:8083/api/orders
+```
+
+```json
+{
+  "requestId": "{{$guid}}",
+  "buyerId": 999999999,
+  "textbookId": 3,
+  "quantity": 1
+}
+```
+
+预期结果为HTTP 422，错误码为DEPENDENCY_NOT_FOUND。
+
+实际结果：
+
+- HTTP状态码：【422】。
+- 响应code：【DEPENDENCY_NOT_FOUND】。
+- 响应message：【user-service中的资源不存在，拒绝本次操作】。
+
+请求前后数据对比：
+
+| 数据项 | 失败请求前 | 失败请求后 | 是否不变 |
+| --- | --- | --- | --- |
+| 订单记录数 | 【2】 | 【2】 | 【是】 |
+| 本次教材库存 | 【2】 | 【2】 | 【是】 |
+| 库存操作记录数 | 【2】 | 【2】 | 【是】 |
+
+验证结论：【没有新增订单和扣减库存】。
+
+### 5. 数据库核对方法
+
+在仓库根目录进入订单数据库：
+
+```bash
+docker compose exec order-db mysql -uorder_app -p campus_order
+```
+
+输入对应应用账号密码后执行：
+
+```sql
+SELECT COUNT(*) AS order_count FROM trade_orders;
+EXIT;
+```
+
+进入教材数据库：
+
+```bash
+docker compose exec textbook-db mysql -utextbook_app -p campus_textbook
+```
+
+输入对应密码后执行：
+
+```sql
+SELECT id, title, stock FROM textbooks ORDER BY id DESC;
+SELECT COUNT(*) AS operation_count FROM stock_operations;
+EXIT;
+```
+
+### 6. “远端成功、本地失败”窗口
+
+当前流程先由教材服务扣减库存，再由订单服务保存订单。
+如果教材服务已经提交库存事务，而订单服务随后发生数据库写入失败
+或进程退出，可能出现“库存已扣减，但订单未保存”的情况。
+
+如果库存已扣减，但HTTP响应丢失或读取超时，
+订单服务也可能无法确认远端是否成功。
+因此，本地没有新增订单，不代表远端库存一定没有变化。
+
+当前实现使用requestId派生固定的库存操作编号，
+同一请求使用原requestId和相同参数重试，可以避免重复扣减。
+但该机制不能代替跨服务原子事务，也不能保证故障后自动恢复一致。
+
+本次仅验证顺序业务流程和基本失败处理。
+未对上述窗口进行故障注入，不实现跨服务原子事务、
+自动补偿或消息机制。
