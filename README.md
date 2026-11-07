@@ -493,6 +493,105 @@ MySQL 数据通过命名数据卷 `mysql_data` 挂载到容器的 `/var/lib/mysq
 
 **持久化验证不要执行 `docker compose down -v`，该命令会删除数据卷及其中的数据库数据。**
 
+## Nacos 服务注册与服务发现
+
+### 初始化配置
+
+本项目使用 `nacos/nacos-server:v3.2.4` 单机模式，数据保存在 Compose 命名卷 `nacos_data` 中。Nacos 已开启鉴权。
+
+首次启动前，在仓库根目录根据 `.env.example` 创建 `.env`，填写数据库密码、Nacos Token、Server identity、Nacos 用户名和密码。
+
+### 首次启动
+
+在仓库根目录执行：
+
+```powershell
+docker compose config --quiet
+docker compose up -d nacos
+docker compose logs -f nacos
+```
+
+Nacos 启动后，访问控制台：
+
+```text
+http://localhost:18081/
+```
+
+首次访问时，按照控制台提示初始化管理员密码。业务服务使用的 Nacos 账号和密码需要与 `.env` 中的 `NACOS_USERNAME`、`NACOS_PASSWORD` 一致。
+
+完成初始化后，启动三个业务服务及必要数据库：
+
+```powershell
+docker compose up -d --build user-service textbook-service order-service
+docker compose ps
+```
+
+查看业务服务日志：
+
+```powershell
+docker compose logs --tail=150 user-service textbook-service order-service
+```
+
+### 端口说明
+
+| 用途 | 容器端口 | 本机端口 | 访问方式 |
+|---|---:|---:|---|
+| Nacos 控制台 | 8080 | 18081 | `http://localhost:18081/` |
+| Nacos 服务端 | 8848 | 18848 | 业务容器使用 `nacos:8848` |
+| Nacos SDK gRPC | 9848 | 19848 | 用于客户端与 Nacos 通信 |
+| `user-service` | 8080 | 8081 | `http://localhost:8081` |
+| `textbook-service` | 8080 | 8082 | `http://localhost:8082` |
+| `order-service` | 8080 | 8083 | `http://localhost:8083` |
+
+Nacos 宿主机端口只绑定到 `127.0.0.1`，不暴露到公网。三个业务服务在 Compose 网络中通过 `nacos:8848` 连接注册中心。
+
+### 注册结果
+
+登录 Nacos 控制台，进入“服务管理 → 服务列表”，应看到：
+
+```text
+user-service
+textbook-service
+order-service
+```
+
+三个服务均属于 `DEFAULT_GROUP`。点击服务详情可以查看实例 IP、端口和健康状态。实例使用容器网络 IP 和容器端口 `8080`；容器重建后 IP 可能发生变化。
+
+订单服务通过 Nacos 查找 `textbook-service` 实例，再完成教材查询和库存扣减。
+
+### 健康检查
+
+```powershell
+Invoke-RestMethod http://localhost:8081/actuator/health
+Invoke-RestMethod http://localhost:8082/actuator/health
+Invoke-RestMethod http://localhost:8083/actuator/health
+```
+
+正常时，各接口返回的状态应为 `UP`。
+
+### 各服务测试
+
+以下命令分别从仓库根目录执行：
+
+```powershell
+cd services/user-service
+mvn test
+```
+
+```powershell
+cd services/textbook-service
+mvn test
+```
+
+```powershell
+cd services/order-service
+mvn test
+```
+
+订单服务测试使用 H2 和 HTTP 桩，不依赖真实 MySQL；测试配置中的教材客户端使用测试地址，不通过真实 Nacos 查找教材服务。
+
+更多部署和注册记录见 `docs/homework/week-07/index.md`。
+
 ## 课程信息
 
 - 课程：微服务开发与实践
