@@ -8,3 +8,11 @@ spring:
     hibernate:
       ddl-auto: create-drop
 
+clients:
+  user:
+    base-url: http://localhost:8081
+  textbook:
+    base-url: http://localhost:8082
+    discovery-enabled: false
+  connect-timeout-ms: 500
+  read-timeout-ms: 1500

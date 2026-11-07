@@ -44,6 +44,28 @@ x-app-common: &app-common
     start_period: 60s
 
 services:
+  nacos:
+    image: nacos/nacos-server:v3.2.4
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_ADMIN_ENABLE: "true"
+      NACOS_AUTH_CONSOLE_ENABLE: "true"
+      NACOS_AUTH_SYSTEM_TYPE: nacos
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:?Set NACOS_AUTH_TOKEN in .env}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:?Set NACOS_AUTH_IDENTITY_KEY in .env}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:?Set NACOS_AUTH_IDENTITY_VALUE in .env}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:18081:8080"
+      - "127.0.0.1:18848:8848"
+      - "127.0.0.1:19848:9848"
+    volumes:
+      - nacos_data:/home/nacos/data
+    networks:
+      - campus_net
   user-db:
     <<: *mysql-common
     environment:
@@ -51,6 +73,10 @@ services:
       MYSQL_USER: user_app
       MYSQL_PASSWORD: ${W06_USER_DB_PASSWORD:?Set W06_USER_DB_PASSWORD in .env}
       MYSQL_ROOT_PASSWORD: ${W06_USER_DB_ROOT_PASSWORD:?Set W06_USER_DB_ROOT_PASSWORD in .env}
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
+      NACOS_GROUP: DEFAULT_GROUP
       TZ: Asia/Shanghai
     volumes:
       - user_mysql_data:/var/lib/mysql
@@ -62,6 +88,7 @@ services:
       MYSQL_USER: textbook_app
       MYSQL_PASSWORD: ${W06_TEXTBOOK_DB_PASSWORD:?Set W06_TEXTBOOK_DB_PASSWORD in .env}
       MYSQL_ROOT_PASSWORD: ${W06_TEXTBOOK_DB_ROOT_PASSWORD:?Set W06_TEXTBOOK_DB_ROOT_PASSWORD in .env}
+      NACOS_SERVER_ADDR: nacos:8848
       TZ: Asia/Shanghai
     volumes:
       - textbook_mysql_data:/var/lib/mysql
@@ -73,6 +100,7 @@ services:
       MYSQL_USER: order_app
       MYSQL_PASSWORD: ${W06_ORDER_DB_PASSWORD:?Set W06_ORDER_DB_PASSWORD in .env}
       MYSQL_ROOT_PASSWORD: ${W06_ORDER_DB_ROOT_PASSWORD:?Set W06_ORDER_DB_ROOT_PASSWORD in .env}
+      NACOS_SERVER_ADDR: nacos:8848
       TZ: Asia/Shanghai
     volumes:
       - order_mysql_data:/var/lib/mysql
@@ -91,6 +119,10 @@ services:
       DB_URL: "jdbc:mysql://user-db:3306/campus_user?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
       DB_USERNAME: user_app
       DB_PASSWORD: ${W06_USER_DB_PASSWORD:?Set W06_USER_DB_PASSWORD in .env}
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
+      NACOS_GROUP: DEFAULT_GROUP
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${W06_USER_PORT:-8081}:8080"
@@ -114,6 +146,10 @@ services:
       USER_SERVICE_URL: http://user-service:8080
       HTTP_CONNECT_TIMEOUT_MS: "2000"
       HTTP_READ_TIMEOUT_MS: "3000"
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
+      NACOS_GROUP: DEFAULT_GROUP
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${W06_TEXTBOOK_PORT:-8082}:8080"
@@ -137,9 +173,12 @@ services:
       DB_USERNAME: order_app
       DB_PASSWORD: ${W06_ORDER_DB_PASSWORD:?Set W06_ORDER_DB_PASSWORD in .env}
       USER_SERVICE_URL: http://user-service:8080
-      TEXTBOOK_SERVICE_URL: http://textbook-service:8080
       HTTP_CONNECT_TIMEOUT_MS: "2000"
       HTTP_READ_TIMEOUT_MS: "3000"
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
+      NACOS_GROUP: DEFAULT_GROUP
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${W06_ORDER_PORT:-8083}:8080"
@@ -148,6 +187,7 @@ volumes:
   user_mysql_data:
   textbook_mysql_data:
   order_mysql_data:
+  nacos_data:
 
 networks:
   campus_net:

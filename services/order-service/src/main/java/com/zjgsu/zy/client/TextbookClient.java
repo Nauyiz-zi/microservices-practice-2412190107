@@ -6,6 +6,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
 
 @Component
 public class TextbookClient {
@@ -18,18 +22,59 @@ public class TextbookClient {
 
     private final RestTemplate rest;
     private final RemoteApi remote;
-    private final String baseUrl;
+    private final DiscoveryClient discoveryClient;
+    private final boolean discoveryEnabled;
+    private final String testBaseUrl;
 
-    public TextbookClient(RestTemplate rest, RemoteApi remote,
-                          @Value("${clients.textbook.base-url}") String baseUrl) {
+    public TextbookClient(
+            RestTemplate rest,
+            RemoteApi remote,
+            DiscoveryClient discoveryClient,
+            @Value("${clients.textbook.discovery-enabled:true}")
+            boolean discoveryEnabled,
+            @Value("${clients.textbook.base-url:}")
+            String testBaseUrl) {
         this.rest = rest;
         this.remote = remote;
-        this.baseUrl = baseUrl.replaceAll("/+$", "");
+        this.discoveryClient = discoveryClient;
+        this.discoveryEnabled = discoveryEnabled;
+        this.testBaseUrl = testBaseUrl.replaceAll("/+$", "");
     }
 
+    private String textbookBaseUrl() {
+        // 测试环境使用本机 HTTP 桩，不依赖真实 Nacos。
+        if (!discoveryEnabled) {
+            if (testBaseUrl.isBlank()) {
+                throw new IllegalStateException(
+                        "测试模式下必须配置 clients.textbook.base-url");
+            }
+            return testBaseUrl;
+        }
+
+        List<ServiceInstance> instances;
+        try {
+            instances = discoveryClient.getInstances("textbook-service");
+        } catch (RuntimeException ex) {
+            throw new ApiException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "DEPENDENCY_UNAVAILABLE",
+                    "无法查询教材服务实例，请稍后重试");
+        }
+
+        if (instances == null || instances.isEmpty()) {
+            throw new ApiException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "DEPENDENCY_UNAVAILABLE",
+                    "教材服务没有可用实例，请稍后重试");
+        }
+
+        ServiceInstance instance = instances.get(
+                ThreadLocalRandom.current().nextInt(instances.size()));
+        return instance.getUri().toString();
+    }
     public BookInfo get(Long id) {
         BookInfo book = remote.call("textbook-service",
-                () -> rest.getForObject(baseUrl + "/api/textbooks/{id}", BookInfo.class, id));
+                () -> rest.getForObject(textbookBaseUrl() + "/api/textbooks/{id}", BookInfo.class, id));
         if (!id.equals(book.id())) {
             throw new ApiException(HttpStatus.BAD_GATEWAY,
                     "INVALID_DEPENDENCY_RESPONSE", "教材服务返回的ID不匹配");
@@ -41,7 +86,7 @@ public class TextbookClient {
     public Deduction deduct(Long id, Long buyerId, Integer quantity, String orderNo) {
         Deduction result = remote.call("textbook-service",
                 () -> rest.exchange(
-                        baseUrl + "/internal/textbooks/{id}/stock-deductions/{orderNo}",
+                        textbookBaseUrl() + "/internal/textbooks/{id}/stock-deductions/{orderNo}",
                         HttpMethod.PUT,
                         new HttpEntity<>(new DeductRequest(buyerId, quantity)),
                         Deduction.class, id, orderNo).getBody());
