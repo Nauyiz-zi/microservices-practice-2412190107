@@ -73,10 +73,6 @@ services:
       MYSQL_USER: user_app
       MYSQL_PASSWORD: ${W06_USER_DB_PASSWORD:?Set W06_USER_DB_PASSWORD in .env}
       MYSQL_ROOT_PASSWORD: ${W06_USER_DB_ROOT_PASSWORD:?Set W06_USER_DB_ROOT_PASSWORD in .env}
-      NACOS_SERVER_ADDR: nacos:8848
-      NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
-      NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
-      NACOS_GROUP: DEFAULT_GROUP
       TZ: Asia/Shanghai
     volumes:
       - user_mysql_data:/var/lib/mysql
@@ -88,7 +84,6 @@ services:
       MYSQL_USER: textbook_app
       MYSQL_PASSWORD: ${W06_TEXTBOOK_DB_PASSWORD:?Set W06_TEXTBOOK_DB_PASSWORD in .env}
       MYSQL_ROOT_PASSWORD: ${W06_TEXTBOOK_DB_ROOT_PASSWORD:?Set W06_TEXTBOOK_DB_ROOT_PASSWORD in .env}
-      NACOS_SERVER_ADDR: nacos:8848
       TZ: Asia/Shanghai
     volumes:
       - textbook_mysql_data:/var/lib/mysql
@@ -100,7 +95,6 @@ services:
       MYSQL_USER: order_app
       MYSQL_PASSWORD: ${W06_ORDER_DB_PASSWORD:?Set W06_ORDER_DB_PASSWORD in .env}
       MYSQL_ROOT_PASSWORD: ${W06_ORDER_DB_ROOT_PASSWORD:?Set W06_ORDER_DB_ROOT_PASSWORD in .env}
-      NACOS_SERVER_ADDR: nacos:8848
       TZ: Asia/Shanghai
     volumes:
       - order_mysql_data:/var/lib/mysql
@@ -122,7 +116,7 @@ services:
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
       NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
-      NACOS_GROUP: DEFAULT_GROUP
+      NACOS_GROUP: CAMPUS_TEXTBOOK_GROUP
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${W06_USER_PORT:-8081}:8080"
@@ -149,7 +143,7 @@ services:
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
       NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
-      NACOS_GROUP: DEFAULT_GROUP
+      NACOS_GROUP: CAMPUS_TEXTBOOK_GROUP
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${W06_TEXTBOOK_PORT:-8082}:8080"
@@ -178,7 +172,7 @@ services:
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
       NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
-      NACOS_GROUP: DEFAULT_GROUP
+      NACOS_GROUP: CAMPUS_TEXTBOOK_GROUP
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${W06_ORDER_PORT:-8083}:8080"
