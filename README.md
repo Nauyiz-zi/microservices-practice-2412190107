@@ -555,7 +555,7 @@ textbook-service
 order-service
 ```
 
-三个服务均属于 `DEFAULT_GROUP`。点击服务详情可以查看实例 IP、端口和健康状态。实例使用容器网络 IP 和容器端口 `8080`；容器重建后 IP 可能发生变化。
+三个服务均属于 `CAMPUS_TEXTBOOK_GROUP`。点击服务详情可以查看实例 IP、端口和健康状态。实例使用容器网络 IP 和容器端口 `8080`；容器重建后 IP 可能发生变化。
 
 订单服务通过 Nacos 查找 `textbook-service` 实例，再完成教材查询和库存扣减。
 
