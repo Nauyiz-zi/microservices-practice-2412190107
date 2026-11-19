@@ -1,7 +1,0 @@
-**/target/
-**/.idea/
-*.iml
-*.log
-**/verification/
-__pycache__/
-.env
