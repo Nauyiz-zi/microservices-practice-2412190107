@@ -592,6 +592,29 @@ mvn test
 
 更多部署和注册记录见 `docs/homework/week-07/index.md`。
 
+## API Gateway
+
+新增独立工程 services/gateway-service/，
+业务统一入口为 http://localhost:8080。
+
+| 路径 | 目标服务 |
+|---|---|
+| /api/users、/api/users/** | user-service |
+| /api/textbooks、/api/textbooks/** | textbook-service |
+| /api/orders、/api/orders/** | order-service |
+
+网关健康检查：
+
+```powershell
+curl.exe -i http://localhost:8080/actuator/health
+```
+
+路由目标使用 lb://服务名，通过 Nacos 服务发现访问实例。
+
+当前完成 API Gateway 路由验证。
+验证中的卖家、买家是业务用户资料，
+登录测试账号及角色将在 JWT 认证步骤实现后补充。
+
 ## 课程信息
 
 - 课程：微服务开发与实践
