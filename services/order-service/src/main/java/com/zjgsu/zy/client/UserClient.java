@@ -1,38 +1,81 @@
 package com.zjgsu.zy.client;
 
 import com.zjgsu.zy.service.ApiException;
-import org.springframework.beans.factory.annotation.Value;
+import feign.FeignException;
+import feign.RetryableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 
 @Component
 public class UserClient {
-    public record UserInfo(Long id, String studentNo, String displayName, Boolean enabled) {}
 
-    private final RestTemplate rest;
-    private final RemoteApi remote;
-    private final String baseUrl;
+    public record UserInfo(
+            Long id,
+            String studentNo,
+            String displayName,
+            Boolean enabled) {}
 
-    public UserClient(RestTemplate rest, RemoteApi remote,
-                      @Value("${clients.user.base-url}") String baseUrl) {
-        this.rest = rest;
-        this.remote = remote;
-        this.baseUrl = baseUrl.replaceAll("/+$", "");
+    private final UserFeignClient feign;
+
+    public UserClient(UserFeignClient feign) {
+        this.feign = feign;
     }
 
     public UserInfo requireEnabled(Long id) {
-        UserInfo user = remote.call("user-service",
-                () -> rest.getForObject(baseUrl + "/api/users/{id}", UserInfo.class, id));
-        if (!id.equals(user.id())) {
-            throw new ApiException(HttpStatus.BAD_GATEWAY,
-                    "INVALID_DEPENDENCY_RESPONSE", "用户服务返回的ID不匹配");
+        UserInfo user;
+
+        try {
+            user = feign.get(id);
+        } catch (RetryableException ex) {
+            throw new ApiException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "DEPENDENCY_UNAVAILABLE",
+                    "用户服务连接失败或超时，请稍后使用原requestId重试");
+        } catch (FeignException ex) {
+            int status = ex.status();
+
+            if (status == 404) {
+                throw new ApiException(
+                        HttpStatus.UNPROCESSABLE_ENTITY,
+                        "DEPENDENCY_NOT_FOUND",
+                        "用户不存在，无法创建订单");
+            }
+
+            if (status == 400 || status == 409 || status == 422) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "DEPENDENCY_REJECTED",
+                        "用户服务拒绝请求，请检查用户编号及状态");
+            }
+
+            if (status >= 500 || status < 0) {
+                throw new ApiException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "DEPENDENCY_UNAVAILABLE",
+                        "用户服务暂时不可用，请稍后使用原requestId重试");
+            }
+
+            throw new ApiException(
+                    HttpStatus.BAD_GATEWAY,
+                    "INVALID_DEPENDENCY_RESPONSE",
+                    "用户服务返回异常响应，无法创建订单");
         }
+
+        if (user == null || !id.equals(user.id())
+                || user.enabled() == null) {
+            throw new ApiException(
+                    HttpStatus.BAD_GATEWAY,
+                    "INVALID_DEPENDENCY_RESPONSE",
+                    "用户服务返回的数据不完整或用户编号不匹配");
+        }
+
         if (!Boolean.TRUE.equals(user.enabled())) {
-            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "USER_DISABLED", "用户未启用，拒绝本次操作");
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "USER_DISABLED",
+                    "用户未启用，无法创建订单");
         }
+
         return user;
     }
 }
-

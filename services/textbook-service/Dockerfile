@@ -7,8 +7,7 @@ COPY src ./src
 
 RUN mvn -B -ntp clean verify
 
-FROM eclipse-temurin:25-jre AS runtime
-
+FROM eclipse-temurin:25-jre-noble AS runtime
 USER root
 
 RUN apt-get update \

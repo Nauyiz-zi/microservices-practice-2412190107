@@ -101,6 +101,7 @@ services:
 
   user-service:
     <<: *app-common
+    scale: 2
     image: campus-user-service:week06
     build:
       context: ./services/user-service
@@ -119,7 +120,10 @@ services:
       NACOS_GROUP: CAMPUS_TEXTBOOK_GROUP
       TZ: Asia/Shanghai
     ports:
-      - "127.0.0.1:${W06_USER_PORT:-8081}:8080"
+      - target: 8080
+        published: "18091-18099"
+        host_ip: 127.0.0.1
+        protocol: tcp
 
   textbook-service:
     <<: *app-common

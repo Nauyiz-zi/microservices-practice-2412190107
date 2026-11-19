@@ -35,6 +35,20 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
+import com.zjgsu.zy.client.UserClient;
+import com.zjgsu.zy.client.UserFeignClient;
+import feign.FeignException;
+import feign.Request;
+import feign.Response;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import static org.mockito.Mockito.when;
+
+import com.zjgsu.zy.client.UserFeignClient;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -43,6 +57,8 @@ class OrderApiTest {
     @Autowired RestTemplate rest;
     @Autowired OrderRepository orders;
     @Autowired OrderService service;
+    @MockitoBean
+    UserFeignClient userFeign;
     MockRestServiceServer server;
     final String requestId = "7c8067da-3f0b-4dc4-badc-7ab86fa45721";
     final String orderNo = "ORD7c8067da3f0b4dc4badc7ab86fa45721";
@@ -60,8 +76,8 @@ class OrderApiTest {
     }
 
     void buyerOk() {
-        server.expect(requestTo("http://localhost:8081/api/users/2"))
-                .andRespond(withSuccess("{\"id\":2,\"enabled\":true}", MediaType.APPLICATION_JSON));
+        when(userFeign.get(2L)).thenReturn(
+                new UserClient.UserInfo(2L, "test-002", "测试买家", true));
     }
 
     void bookOk() {
@@ -94,26 +110,38 @@ class OrderApiTest {
         assertEquals(1, orders.count());
     }
 
-    @Test void missingBuyerReturns422AndDoesNotInsert() throws Exception {
-        server.expect(requestTo("http://localhost:8081/api/users/2"))
+    @Test
+    void missingBookReturns422AndDoesNotInsert() throws Exception {
+        buyerOk();
+
+        server.expect(requestTo("http://localhost:8082/api/textbooks/1"))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
-        mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON).content(createJson()))
-                .andExpect(status().isUnprocessableEntity());
+
+        mvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createJson()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("DEPENDENCY_NOT_FOUND"));
+
         assertEquals(0, orders.count());
     }
 
-    @Test void missingBookReturns422AndDoesNotInsert() throws Exception {
-        buyerOk();
-        server.expect(requestTo("http://localhost:8082/api/textbooks/1"))
-                .andRespond(withStatus(HttpStatus.NOT_FOUND));
-        mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON).content(createJson()))
-                .andExpect(status().isUnprocessableEntity());
+    @Test
+    void missingBuyerReturns422AndDoesNotInsert() throws Exception {
+        when(userFeign.get(2L)).thenThrow(userError(404));
+
+        mvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createJson()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("DEPENDENCY_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("用户不存在，无法创建订单"));
+
         assertEquals(0, orders.count());
     }
 
     @Test void unavailableBuyerServiceReturns503AndDoesNotInsert() throws Exception {
-        server.expect(requestTo("http://localhost:8081/api/users/2"))
-                .andRespond(withException(new ConnectException("connection refused")));
+        when(userFeign.get(2L)).thenThrow(userError(503));
         mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON).content(createJson()))
                 .andExpect(status().isServiceUnavailable());
         assertEquals(0, orders.count());
@@ -148,6 +176,25 @@ class OrderApiTest {
     @Test void health() throws Exception {
         mvc.perform(get("/actuator/health")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    FeignException userError(int status) {
+        Request request = Request.create(
+                Request.HttpMethod.GET,
+                "http://user-service/api/users/2",
+                Map.of(),
+                (byte[]) null,
+                StandardCharsets.UTF_8,
+                null);
+
+        Response response = Response.builder()
+                .status(status)
+                .reason("test")
+                .request(request)
+                .headers(Map.of())
+                .build();
+
+        return FeignException.errorStatus("UserFeignClient#get", response);
     }
 }
 

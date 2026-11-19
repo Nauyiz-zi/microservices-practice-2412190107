@@ -7,6 +7,18 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+        password: test-only
+    openfeign:
+      client:
+        config:
+          user-service:
+            url: http://localhost:8081
+            connectTimeout: 500
+            readTimeout: 1500
 
 clients:
   user:
