@@ -13,10 +13,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import com.zjgsu.zy.auth.TestJwtKeys;
+import org.springframework.context.annotation.Import;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(TestJwtKeys.class)
 class UserApiTest {
     @Autowired MockMvc mvc;
     @Autowired UserRepository users;

@@ -10,3 +10,7 @@
 !.env.example
 # Local test artifacts
 /work/
+
+# Private/local key material
+*.pem
+*.key

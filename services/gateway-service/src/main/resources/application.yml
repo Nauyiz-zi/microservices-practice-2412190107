@@ -1,0 +1,70 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: gateway-service
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD}
+        group: ${NACOS_GROUP:CAMPUS_TEXTBOOK_GROUP}
+        register-enabled: true
+
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 20s
+
+          default-filters:
+            - SetResponseHeader=X-Gateway-Service,gateway-service
+
+          routes:
+            - id: auth-route
+              uri: lb://user-service
+              predicates:
+                - Path=/api/auth/**,/.well-known/jwks.json
+              filters:
+                - SetResponseHeader=X-Gateway-Route,auth-route
+
+            - id: user-route
+              uri: lb://user-service
+              predicates:
+                - Path=/api/users,/api/users/**
+              filters:
+                - SetResponseHeader=X-Gateway-Route,user-route
+
+            - id: textbook-route
+              uri: lb://textbook-service
+              predicates:
+                - Path=/api/textbooks,/api/textbooks/**
+              filters:
+                - SetResponseHeader=X-Gateway-Route,textbook-route
+
+            - id: order-route
+              uri: lb://order-service
+              predicates:
+                - Path=/api/orders,/api/orders/**
+              filters:
+                - SetResponseHeader=X-Gateway-Route,order-route
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+  endpoint:
+    health:
+      show-details: never
+
+auth:
+  jwt:
+    public-key: ${JWT_PUBLIC_KEY:file:/run/secrets/jwt-public.pem}
+    issuer: campus-textbook-auth
+    audience: campus-api

@@ -7,4 +7,12 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+        password: test-only
 
+auth:
+  bootstrap:
+    enabled: false

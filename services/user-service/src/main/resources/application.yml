@@ -33,3 +33,17 @@ management:
   endpoint:
     health:
       show-details: never
+
+auth:
+  jwt:
+    issuer: campus-textbook-auth
+    audience: campus-api
+    ttl-seconds: 900
+    private-key: ${JWT_PRIVATE_KEY:file:/run/secrets/jwt-private.pem}
+    public-key: ${JWT_PUBLIC_KEY:file:/run/secrets/jwt-public.pem}
+  bootstrap:
+    enabled: ${AUTH_BOOTSTRAP_ENABLED:false}
+    admin-username: ${AUTH_ADMIN_USERNAME:demo-admin}
+    admin-password-hash: ${AUTH_ADMIN_PASSWORD_HASH:}
+    user-username: ${AUTH_USER_USERNAME:demo-user}
+    user-password-hash: ${AUTH_USER_PASSWORD_HASH:}

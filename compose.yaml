@@ -118,12 +118,15 @@ services:
       NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
       NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
       NACOS_GROUP: CAMPUS_TEXTBOOK_GROUP
+      AUTH_BOOTSTRAP_ENABLED: "true"
+      AUTH_ADMIN_USERNAME: ${AUTH_ADMIN_USERNAME:-demo-admin}
+      AUTH_ADMIN_PASSWORD_HASH: ${AUTH_ADMIN_PASSWORD_HASH:?Set AUTH_ADMIN_PASSWORD_HASH in .env}
+      AUTH_USER_USERNAME: ${AUTH_USER_USERNAME:-demo-user}
+      AUTH_USER_PASSWORD_HASH: ${AUTH_USER_PASSWORD_HASH:?Set AUTH_USER_PASSWORD_HASH in .env}
       TZ: Asia/Shanghai
-    ports:
-      - target: 8080
-        published: "18091-18099"
-        host_ip: 127.0.0.1
-        protocol: tcp
+    volumes:
+      - ./work/jwt/private.pem:/run/secrets/jwt-private.pem:ro
+      - ./work/jwt/public.pem:/run/secrets/jwt-public.pem:ro
 
   textbook-service:
     <<: *app-common
@@ -149,8 +152,6 @@ services:
       NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
       NACOS_GROUP: CAMPUS_TEXTBOOK_GROUP
       TZ: Asia/Shanghai
-    ports:
-      - "127.0.0.1:${W06_TEXTBOOK_PORT:-8082}:8080"
 
   order-service:
     <<: *app-common
@@ -178,8 +179,36 @@ services:
       NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
       NACOS_GROUP: CAMPUS_TEXTBOOK_GROUP
       TZ: Asia/Shanghai
+
+  gateway-service:
+    <<: *app-common
+    image: campus-gateway-service:week09
+    build:
+      context: ./services/gateway-service
+      dockerfile: Dockerfile
+
+    depends_on:
+      nacos:
+        condition: service_started
+      user-service:
+        condition: service_healthy
+      textbook-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+
+    environment:
+      SERVER_PORT: "8080"
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_USERNAME: ${NACOS_USERNAME:?Set NACOS_USERNAME in .env}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:?Set NACOS_PASSWORD in .env}
+      NACOS_GROUP: CAMPUS_TEXTBOOK_GROUP
+      TZ: Asia/Shanghai
+
+    volumes:
+      - ./work/jwt/public.pem:/run/secrets/jwt-public.pem:ro
     ports:
-      - "127.0.0.1:${W06_ORDER_PORT:-8083}:8080"
+      - "127.0.0.1:8080:8080"
 
 volumes:
   user_mysql_data:
