@@ -72,4 +72,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\gateway-auth-s
 
 脚本验证无 Token 401、Token 正常访问、USER 越权 403、ADMIN 放行、伪造身份头覆盖、篡改 Token 401，以及带 Token 发布教材、下单、查询和库存扣减，最后检查实际容器没有业务宿主机端口绑定。成功退出码为 0，任一断言失败立即打印 FAIL 并以 1 退出。每次使用唯一编号创建测试数据，可重复运行。
 
-本步收回业务宿主机端口后，Week 08 依赖直接服务端口的旧 E2E 命令不再适用。应通过网关并携带 Token 执行本周验证；后续“自动测试”任务再统一更新旧脚本。
+收回业务宿主机端口后，Week 08 依赖直接服务端口的旧 E2E 命令不再适用。本周在 Git Bash 中执行以下脚本，通过网关验证未登录、登录、授权访问与低权限越权：
+
+```bash
+bash scripts/auth-test.sh
+echo "auth-test exit code: $?"
+```
+
+脚本另外覆盖伪造身份头、错误密码与篡改 Token；所有断言通过返回 0，任一失败返回 1。本人实际环境中已连续运行两次，均全部通过且退出码为 0，结果见 Week 09 作业文档。

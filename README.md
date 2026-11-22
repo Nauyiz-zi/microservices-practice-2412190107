@@ -592,13 +592,14 @@ mvn test
 
 更多部署和注册记录见 `docs/homework/week-07/index.md`。
 
-## API Gateway
+## API Gateway 与 JWT 认证（Week 09）
 
 新增独立工程 services/gateway-service/，
 业务统一入口为 http://localhost:8080。
 
 | 路径 | 目标服务 |
 |---|---|
+| /api/auth/**、/.well-known/jwks.json | user-service |
 | /api/users、/api/users/** | user-service |
 | /api/textbooks、/api/textbooks/** | textbook-service |
 | /api/orders、/api/orders/** | order-service |
@@ -611,9 +612,31 @@ curl.exe -i http://localhost:8080/actuator/health
 
 路由目标使用 lb://服务名，通过 Nacos 服务发现访问实例。
 
-当前完成 API Gateway 路由验证。
-验证中的卖家、买家是业务用户资料，
-登录测试账号及角色将在 JWT 认证步骤实现后补充。
+健康检查、POST `/api/auth/login` 和公开 JWKS 无需登录，其余业务 API 携带 `Authorization: Bearer <access_token>`。网关验证 JWT 签名、有效期、issuer 和 audience，未认证返回 401，角色不足返回 403。
+
+### 测试账号与角色
+
+| 测试账号 | 角色 | 权限 |
+|---|---|---|
+| demo-user | USER | 普通业务接口；不能创建用户资料或查询认证账号列表 |
+| demo-admin | ADMIN | 普通业务接口、创建用户资料、查询认证账号列表 |
+
+密码由本人本地配置，数据库仅保存 BCrypt cost=12 哈希。验证脚本安全交互读取密码，CI 可使用秘密环境变量；仓库不保存真实密码、JWT 私钥或真实 Token。
+
+当前 Week 09 配置取消 user/textbook/order 服务的宿主机端口映射，仅网关发布业务入口 `127.0.0.1:8080`。下游通过受信任的 Docker 内网通信，不能继续使用上文 Week 07 部署记录中的 8081/8082/8083 宿主机地址。网关覆盖客户端伪造的身份请求头；Docker 管理权限和容器内访问属于可信运维边界。
+
+### 认证与授权验证
+
+在项目根目录的 Git Bash 中运行：
+
+```bash
+bash scripts/auth-test.sh
+echo "auth-test exit code: $?"
+```
+
+脚本覆盖未登录、登录获取 JWT、授权访问、低权限越权、伪造身份头、错误密码及篡改 Token。全部通过输出 `ALL AUTH TESTS PASSED` 并返回 0；任一失败返回 1。实际环境已连续两次通过，截图保存在 `docs/homework/week-09/screenshots/`。
+
+完整部署与验证记录见 [Week 09 作业文档](docs/homework/week-09/index.md)，认证流程、权限及路由表见 [安全设计](docs/security.md)。
 
 ## 课程信息
 
