@@ -523,3 +523,110 @@ JWT 登录、验签、角色规则及受保护接口访问尚待后续步骤实�
 
 复现时应使用新建数据返回的编号，
 不应假定用户、教材和订单 ID 始终与本次相同。
+
+## 二、认证服务
+
+### 2.1 设计
+
+认证功能位于 services/user-service/。新增 auth_accounts 表，
+与现有 users 业务资料表分离，保留原业务用户接口和服务协作。
+认证账号包括 USER、ADMIN 两种角色；角色由服务端初始化写入，
+登录请求只接收用户名和密码，不允许客户端自行指定角色。
+
+密码使用 BCrypt cost=12 和每次编码生成的随机盐。
+初始化只接收环境变量中的BCrypt哈希，不接收明文初始化密码，
+不覆盖已有密码、角色或禁用状态。唯一约束及冲突后的重新读取，
+保证两个用户实例同时启动时不会创建重复账号。
+
+### 2.2 接口与安全规则
+
+| 接口 | 规则 |
+|---|---|
+| POST /api/auth/login | 匿名可访问；错误密码或禁用账号返回401 |
+| GET /api/auth/me | 必须携带有效Bearer JWT |
+| GET /api/auth/accounts | 仅ADMIN可访问，响应不包含密码哈希 |
+| GET /.well-known/jwks.json | 公开验签公钥，不包含私钥 |
+
+JWT采用RS256签发，包含sub、roles、iss、aud、iat、nbf、exp、jti，
+有效期900秒。验签固定使用RS256，并检查有效期、issuer与audience。
+未认证返回401，角色不足返回403，响应包含清晰的JSON错误。
+
+两个用户服务实例共享同一RSA密钥对。密钥在本地生成，
+通过只读挂载提供给用户服务，不写入代码、镜像或Git仓库。
+网关新增auth-route，通过lb://user-service转发认证及公钥请求。
+
+本步骤验证认证域内的验签和角色规则。
+旧业务接口暂按上一阶段规则运行，全站业务入口鉴权在下一步收紧。
+
+### 2.3 主要代码
+
+- services/user-service/src/main/java/com/zjgsu/zy/auth/
+- services/user-service/src/test/java/com/zjgsu/zy/auth/AuthApiTest.java
+- services/user-service/src/test/java/com/zjgsu/zy/auth/TestJwtKeys.java
+- services/user-service/src/test/java/com/zjgsu/zy/auth/PasswordHashTool.java
+- scripts/auth-smoke.ps1
+- 用户服务和网关的application.yml，以及根目录compose.yaml
+
+### 2.4 测试账号
+
+| 账号 | 角色 | 密码 |
+|---|---|---|
+| demo-user | USER | 本机交互设置，文档不保存明文 |
+| demo-admin | ADMIN | 本机交互设置，文档不保存明文 |
+
+若修改初始化账号名，应同步更新README及脚本参数。
+
+### 2.5 运行命令
+
+在仓库根目录PowerShell执行：
+
+```powershell
+mvn -f services/user-service/pom.xml clean verify
+docker compose config --quiet
+docker compose --progress plain build user-service gateway-service
+docker compose up -d --no-deps --force-recreate --scale user-service=1 user-service
+# 等第一个实例healthy，完成新表和账号初始化后，再扩到两个实例：
+docker compose up -d --no-deps --scale user-service=2 user-service
+docker compose ps user-service
+docker compose up -d --no-deps --force-recreate gateway-service
+docker compose ps gateway-service
+& .\scripts\auth-smoke.ps1
+```
+
+运行前先完成本地密钥生成、BCrypt哈希生成及.env配置。
+脚本通过交互读取密码，不在命令行、脚本文件或日志中保存明文。
+成功输出ALL AUTH CHECKS PASSED并退出0；失败输出FAIL并退出1。
+
+### 2.6 验证方法
+
+自动化测试使用H2及运行时生成的临时RSA密钥，
+验证登录、哈希存储、错误密码、缺失Token、角色差异、
+签名篡改、过期、错误issuer/audience及公钥不泄露私钥。
+
+真实环境脚本通过网关验证两种角色登录、
+普通用户访问me成功但访问账号列表返回403、
+管理员访问账号列表成功、错误密码和缺失/篡改Token返回401。
+
+数据库查询核对auth_accounts只有password_hash，
+哈希前缀为BCrypt cost=12，长度为60；业务响应不返回该字段。
+
+### 2.7 实际验证结果
+
+| 验证项目 | 实际结果 |
+|---|---|
+| USER、ADMIN 登录 | 均返回 HTTP 200 和 JWT |
+| Token 类型及有效期 | Bearer，900 秒 |
+| 有效 JWT 查询当前身份 | 连续五次返回 HTTP 200 |
+| 错误密码 | HTTP 401 |
+| 缺少 Token | HTTP 401 |
+| 篡改 Token 签名 | HTTP 401 |
+| USER 访问管理员接口 | HTTP 403 |
+| ADMIN 访问账号列表 | HTTP 200 |
+| 账号列表响应 | 不包含密码哈希 |
+| 公开公钥接口 | HTTP 200，不包含私钥 |
+| 数据库密码存储 | 两个账号均为 BCrypt cost=12，哈希长度60 |
+| 认证脚本 | ALL AUTH CHECKS PASSED |
+
+认证流程与数据库查询共同验证了登录、JWT签发验签、
+角色差异及密码哈希存储。认证账号使用USER和ADMIN两种角色，
+数据库保存BCrypt哈希，未保存明文登录密码。
