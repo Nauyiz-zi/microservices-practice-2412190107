@@ -3,11 +3,6 @@
 本周目标是为校园二手教材微服务系统增加统一 API 入口、
 JWT 认证与受保护接口访问。
 
-当前已完成第一项 API Gateway：
-新增独立网关工程，通过服务名转发用户、教材和订单请求，
-并完成健康检查及实际业务流程验证。
-JWT 登录、验签和角色鉴权将在后续步骤实现。
-
 ## 一、API Gateway
 
 ### 1.1 实现目标与设计
@@ -631,7 +626,7 @@ docker compose ps gateway-service
 角色差异及密码哈希存储。认证账号使用USER和ADMIN两种角色，
 数据库保存BCrypt哈希，未保存明文登录密码。
 
-##三、 网关鉴权
+## 三、 网关鉴权
 
 ### 3.1 实现思路
 
@@ -694,3 +689,78 @@ $LASTEXITCODE
 防绕过措施为取消下游宿主机端口映射，让普通外部客户端统一通过网关。Docker 内网、Docker 管理权限及容器内访问属于可信运维边界；该措施不等同于下游全部独立实现 JWT 校验。
 
 本步实现的是角色级授权，尚未建立认证账号与业务 buyerId/sellerId 的归属关联，不将本次验证描述为已实现对象级权限控制。完整认证流程、角色权限、身份头处理和路由表见 `docs/security.md`。
+
+## 四、 测试脚本
+
+### 4.1 实现思路
+
+新增 `scripts/auth-test.sh`，通过网关统一入口 `http://localhost:8080` 执行真实 HTTP 请求。脚本使用 Bash、curl 和 Python 3 标准库，Python 仅负责生成和解析 JSON，不需要安装第三方 Python 包。
+
+脚本覆盖以下场景：
+
+1. 未登录访问受保护接口 `/api/auth/me`，断言 HTTP 401。
+2. 使用普通账号 `demo-user` 登录 `/api/auth/login`，断言 HTTP 200；校验返回的 Bearer JWT 格式、有效期和 USER 角色，防止误用管理员账号完成越权测试。
+3. 携带 Token 访问 `/api/auth/me` 和 `/api/textbooks`，断言 HTTP 200，并校验返回的认证身份与登录账号一致。
+4. 使用 USER Token 访问管理接口 `/api/auth/accounts`，断言 HTTP 403。
+
+另外覆盖无 Token 伪造身份头仍返回 401、USER Token 搭配伪造 ADMIN 头仍返回 403、篡改 Token 返回 401、错误密码返回 401。网关拦截场景同时校验 `X-Auth-Enforcer: gateway`，确认拒绝发生在网关。
+
+脚本每项成功输出 `[PASS]`，全部成功输出 `ALL AUTH TESTS PASSED` 并以 0 退出；HTTP 状态不符、JSON 或身份不符、连接失败、超时、缺少依赖等情况输出 `[FAIL]` 并以 1 退出，不将“请求得到响应”视为测试通过。
+
+密码默认安全交互输入；CI 可通过受保护的环境变量 `AUTH_TEST_PASSWORD` 提供。脚本不输出密码或完整 Token，也不把密码、Token 放入 curl/Python 的命令行参数。临时文件在退出时清理。脚本只读业务数据并执行登录，不创建或删除业务资料，可重复运行。
+
+### 4.2 运行命令
+
+先确认第 3 小题部署已完成，网关和下游服务均正常。以下命令在项目根目录的 **Git Bash** 中执行，不是在 PowerShell 中执行：
+
+```bash
+bash -n scripts/auth-test.sh
+bash scripts/auth-test.sh
+echo "auth-test exit code: $?"
+```
+
+按提示输入 `demo-user` 的本地密码。测试账号角色为 USER，密码不写入仓库；ADMIN 权限规则沿用第 3 小题。
+
+需要保存终端日志时：
+
+```bash
+mkdir -p work
+set -o pipefail
+bash scripts/auth-test.sh 2>&1 | tee work/w09-auth-test.log
+test_exit=${PIPESTATUS[0]}
+printf 'auth-test exit code: %s\n' "$test_exit"
+```
+
+使用 `PIPESTATUS[0]` 获取脚本的退出码，避免将 `tee` 的成功退出误认为脚本成功。建议连续运行两次核验可重复性。
+
+默认入口可使用 `BASE_URL` 修改，默认账号可使用 `AUTH_TEST_USERNAME` 修改。例如：
+
+```bash
+BASE_URL=http://localhost:8080 AUTH_TEST_USERNAME=demo-user bash scripts/auth-test.sh
+```
+
+非交互运行需要在 CI 的秘密变量中配置 `AUTH_TEST_PASSWORD`，不要将真实密码写入脚本、文档或命令记录。
+
+### 4.3 验证结果
+
+已在本人实际 Docker 环境中，通过 Git Bash 连续运行两次 `bash scripts/auth-test.sh`。两次均输出 `ALL AUTH TESTS PASSED`，并在脚本结束后立即查询退出码，两次均为 `0`。
+
+| 验证项 | 第一次运行 | 第二次运行 | 结论 |
+|---|---|---|---|
+| 网关健康检查 | 200 | 200 | 通过 |
+| 未登录访问受保护接口 | 401 | 401 | 通过 |
+| 无 Token 伪造 ADMIN 身份头 | 401 | 401 | 通过 |
+| 普通账号登录 | 200 | 200 | 通过 |
+| Token 格式与角色检查 | Bearer JWT、USER 角色、有效期大于 0 | 同样通过 | 通过 |
+| 携带 Token 访问认证身份接口 | 200，身份和 USER 角色匹配 | 同样通过 | 通过 |
+| 携带 Token 访问普通业务接口 | 200 | 200 | 通过 |
+| USER Token 访问管理接口 | 403 | 403 | 通过 |
+| USER Token 搭配伪造 ADMIN 头 | 403 | 403 | 通过 |
+| 篡改 Token | 401 | 401 | 通过 |
+| 错误密码 | 401 | 401 | 通过 |
+| 脚本总体结果 | ALL AUTH TESTS PASSED | ALL AUTH TESTS PASSED | 通过 |
+| 脚本退出码 | 0 | 0 | 通过 |
+
+验证结果覆盖了未登录、登录、授权访问和低权限越权四个必需场景，并额外覆盖伪造身份头、错误密码与篡改 Token。连续两次运行结果一致，说明脚本可重复执行；运行过程中密码不回显，完整 Token 不写入终端日志。
+
+本次结果来自本人通过实际网关执行脚本的输出。代码包此前的隔离 HTTP 场景测试另外验证了：异常放行、错误身份、非法 JSON 和业务 503 等情况会使脚本失败并返回 1，不会将服务故障或错误响应当成通过。
