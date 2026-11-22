@@ -630,3 +630,67 @@ docker compose ps gateway-service
 认证流程与数据库查询共同验证了登录、JWT签发验签、
 角色差异及密码哈希存储。认证账号使用USER和ADMIN两种角色，
 数据库保存BCrypt哈希，未保存明文登录密码。
+
+##三、 网关鉴权
+
+### 3.1 实现思路
+
+网关使用 Spring Security Reactive Resource Server 校验 RS256 JWT，验证签名、有效期、issuer 和 audience。公开健康检查、登录及 JWKS；其他业务 API 要求 USER 或 ADMIN 角色。创建用户资料与查询认证账号列表要求 ADMIN。没有有效 Token 返回 401，已登录但权限不足返回 403。
+
+网关在转发前删除客户端提供的身份和角色头，再根据验签后的 JWT 重建 `X-Authenticated-User`、`X-Authenticated-Roles`。下游 `/api/auth/request-context` 返回再次验签的身份和实际收到的头，用于核验伪造头不能冒充管理员。
+
+Compose 取消三个业务服务的宿主机端口映射，仅网关发布业务入口 8080。下游仍可通过受信任的 Docker 内网完成调用；拥有 Docker 管理权限或内网容器访问能力不属于该网络隔离的防御范围。完整路由表和安全边界见 `docs/security.md`。
+
+### 3.2 运行命令
+
+在仓库根目录 PowerShell 中执行，保留之前配置的本地密钥和环境变量：
+
+```powershell
+docker compose config --quiet
+mvn -f .\services\gateway-service\pom.xml test
+mvn -f .\services\user-service\pom.xml test
+
+docker compose build user-service gateway-service
+docker compose up -d --no-deps --force-recreate --scale user-service=2 user-service
+# 待两个用户服务实例均 healthy 后继续。
+docker compose up -d --no-deps --force-recreate textbook-service order-service
+# 待教材、订单服务 healthy 后继续。
+docker compose up -d --no-deps --force-recreate gateway-service
+docker compose ps
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\gateway-auth-smoke.ps1
+$LASTEXITCODE
+```
+
+脚本交互输入 demo-user、demo-admin 的本地密码，不输出密码或完整 Token。运行中创建唯一编号的测试资料、教材和订单。全部通过返回 0；失败返回 1。
+
+### 3.3 验证结果
+
+实际 Docker 环境验证通过。网关、两个用户服务实例、教材服务和订单服务均为 healthy；业务宿主机端口仅由网关发布为 `127.0.0.1:8080`，三个下游服务仅保留容器内部 `8080/tcp`。Nacos 的独立管理端口保留。
+
+执行 `gateway-auth-smoke.ps1`，所有断言通过，最后输出 `ALL GATEWAY AUTH CHECKS PASSED`，随后查询 `$LASTEXITCODE` 为 `0`。
+
+| 验证项 | 实际结果 | 结论 |
+|---|---|---|
+| 网关健康检查 | HTTP 200 | 通过 |
+| 无 Token 访问业务接口 | HTTP 401，确认由网关拦截 | 通过 |
+| 无 Token 但伪造 ADMIN 身份头 | HTTP 401 | 通过 |
+| USER、ADMIN 登录 | 均 HTTP 200，角色分别为 USER、ADMIN | 通过 |
+| USER Token 访问普通业务 API | HTTP 200 | 通过 |
+| USER Token 搭配伪造 ADMIN 头创建用户资料 | HTTP 403，确认由网关拦截 | 通过 |
+| USER 访问认证账号列表 | HTTP 403 | 通过 |
+| ADMIN 访问认证账号列表 | HTTP 200 | 通过 |
+| ADMIN 创建卖家、买家资料 | 均 HTTP 201 | 通过 |
+| 伪造身份头覆盖 | 下游 username=demo-user、forwardedUser=demo-user、forwardedRoles=USER | 通过 |
+| 旧式身份头清理 | X-User-Id、X-Role 均未到达下游 | 通过 |
+| 篡改 JWT 签名后访问 | HTTP 401，确认由网关拦截 | 通过 |
+| 携带 Token 发布教材、创建订单 | 均 HTTP 201 | 通过 |
+| 查询订单、教材 | 均 HTTP 200，订单编号匹配，库存由 3 降至 2 | 通过 |
+| 下游宿主机端口检查 | 两个 user-service 实例及 textbook/order 服务均输出 NO_HOST_PORT | 通过 |
+| 脚本退出状态 | ALL GATEWAY AUTH CHECKS PASSED，退出码 0 | 通过 |
+
+本次业务流程创建的订单 ID 为 `21`，买家资料 ID 为 `12`，教材 ID 为 `8`，订单状态为 `PENDING_PAYMENT`。以上结果来自本人实际运行输出，脚本没有打印密码或完整 Token。
+
+防绕过措施为取消下游宿主机端口映射，让普通外部客户端统一通过网关。Docker 内网、Docker 管理权限及容器内访问属于可信运维边界；该措施不等同于下游全部独立实现 JWT 校验。
+
+本步实现的是角色级授权，尚未建立认证账号与业务 buyerId/sellerId 的归属关联，不将本次验证描述为已实现对象级权限控制。完整认证流程、角色权限、身份头处理和路由表见 `docs/security.md`。
