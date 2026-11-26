@@ -636,7 +636,144 @@ echo "auth-test exit code: $?"
 
 脚本覆盖未登录、登录获取 JWT、授权访问、低权限越权、伪造身份头、错误密码及篡改 Token。全部通过输出 `ALL AUTH TESTS PASSED` 并返回 0；任一失败返回 1。实际环境已连续两次通过，截图保存在 `docs/homework/week-09/screenshots/`。
 
-完整部署与验证记录见 [Week 09 作业文档](docs/homework/week-09/index.md)，认证流程、权限及路由表见 [安全设计](docs/security.md)。
+## 本地环境变量与安全配置（Week 10）
+
+### 配置分类
+
+| 配置类型 | 保存位置 | 是否提交Git |
+|---|---|---|
+| 连接池参数、业务阈值、日志级别 | Nacos及config/nacos示例 | 是，仅非敏感内容 |
+| 环境变量名称及占位符 | .env.example | 是 |
+| 真实数据库密码、Nacos认证信息、账号初始化哈希 | 本地.env | 否 |
+| JWT私钥及本地公钥文件 | work/jwt/ | 否 |
+
+.env.example只提供变量名称和占位符，不包含真实密码、密钥或Token。
+真实值由本人在本地填写，CI环境使用受保护的秘密变量。
+
+### 创建本地环境文件
+
+在项目根目录的PowerShell中执行：
+
+```powershell
+if (!(Test-Path .env)) {
+    Copy-Item .env.example .env
+}
+
+notepad .env
+```
+
+已有部署继续使用原来的.env和密钥文件，不覆盖已有配置。
+
+首次部署时填写：
+
+- 三个业务数据库的应用账号密码与管理员密码。
+- Nacos认证Token、Server Identity及客户端登录账号密码。
+- demo-user和demo-admin的BCrypt cost=12密码哈希。
+- APP_PROFILE，取dev或test。
+
+NACOS_USERNAME和NACOS_PASSWORD必须与本地Nacos实例中的账号一致。
+.env中的单引号可保留值中的美元符号，BCrypt哈希应保留完整内容。
+
+账号初始化只为不存在的账号创建记录；
+修改.env中的初始化哈希不会自动重置已有账号密码。
+
+### 首次生成账号密码哈希
+
+已有正常账号时无需重新生成。
+
+首次部署可在项目根目录PowerShell执行：
+
+```powershell
+$authClasspath = Join-Path (Get-Location) "services/user-service/target/auth-classpath.txt"
+
+mvn -f services/user-service/pom.xml test-compile dependency:build-classpath "-Dmdep.outputFile=$authClasspath"
+
+$module = Join-Path (Get-Location) "services/user-service"
+$dependencies = (Get-Content $authClasspath -Raw).Trim()
+$cp = "$module\target\test-classes;$module\target\classes;$dependencies"
+
+java -cp $cp com.zjgsu.zy.auth.PasswordHashTool
+```
+
+工具安全读取密码和确认密码，仅输出BCrypt cost=12哈希。
+将生成的完整哈希填写到本地.env对应变量，不粘贴到README、
+公开配置、截图或提交记录中。
+
+分别为demo-admin、demo-user运行工具。
+测试账号与角色保持为demo-admin/ADMIN、demo-user/USER。
+
+### 密钥与Nacos认证信息
+
+JWT使用本地RSA密钥文件：
+
+- work/jwt/private.pem
+- work/jwt/public.pem
+
+用户服务只读挂载公私钥，网关只读挂载公钥。
+已有部署保留当前密钥，不在普通启动或重启时重新生成。
+
+首次部署需要生成Nacos随机认证参数时，可在Git Bash中运行：
+
+```bash
+# NACOS_AUTH_TOKEN：Base64编码的随机值
+openssl rand -base64 48
+
+# NACOS_AUTH_IDENTITY_KEY
+openssl rand -hex 16
+
+# NACOS_AUTH_IDENTITY_VALUE
+openssl rand -hex 32
+```
+
+生成结果仅填入本地.env，不保存到公开文档或截图。
+已有Nacos部署沿用其当前认证配置。
+
+### 环境变量优先级
+
+Compose从项目根目录.env读取变量。
+当前终端中已设置的同名环境变量会覆盖.env。
+
+例如在PowerShell临时选择test：
+
+```powershell
+$env:APP_PROFILE = "test"
+docker compose config --quiet
+```
+
+恢复使用.env中的APP_PROFILE：
+
+```powershell
+Remove-Item Env:APP_PROFILE -ErrorAction SilentlyContinue
+```
+
+.env仅由Compose用于变量替换，不会自动将所有变量传入容器。
+容器实际接收的变量由compose.yaml的environment配置决定。
+
+### 配置与Git检查
+
+在项目根目录执行：
+
+```powershell
+docker compose config --quiet
+
+git check-ignore .env work/jwt/private.pem work/jwt/public.pem
+
+git ls-files -- .env "*.pem" "*.key"
+
+git ls-files -- .env.example
+```
+
+预期：
+
+- Compose检查成功时不输出配置内容。
+- check-ignore列出.env和两个密钥路径。
+- 查询已跟踪的.env、PEM和KEY文件时无输出。
+- 查询.env.example时能看到该模板文件。
+
+使用docker compose config --quiet检查语法，
+避免将包含展开后敏感值的完整配置输出到提交材料。
+
+配置环境、Data ID、Group和验证方法见docs/configuration.md。
 
 ## 课程信息
 
