@@ -214,3 +214,58 @@ Nacos 发布配置后，教材服务在同一实例、同一 JVM 中读取到新
 无需重新打包或重启服务。
 
 本次验证针对库存预警业务参数，不将其结论扩展到连接池等其他配置。
+
+## 4. 安全配置
+
+### 实现思路
+
+将非敏感配置与敏感配置分开管理。
+
+连接池参数、业务阈值和日志级别集中保存在Nacos，
+配置示例可以提交Git。
+
+数据库密码、Nacos认证信息和账号初始化哈希保存在本地.env；
+JWT密钥保存在work/jwt目录，不提交Git。
+.env.example仅列出变量名称和占位符，提供首次部署参考。
+
+.gitignore忽略.env、本地环境文件、work目录以及PEM和KEY文件，
+明确保留.env.example。
+
+README记录模板复制、本地填写、密码哈希生成、
+环境变量优先级及Git检查方法。
+
+### 运行命令
+
+在项目根目录PowerShell中执行：
+
+```powershell
+docker compose config --quiet
+
+git check-ignore .env work/jwt/private.pem work/jwt/public.pem
+
+git ls-files -- .env "*.pem" "*.key"
+
+git ls-files -- .env.example
+```
+
+### 验证结果
+
+本次对当前仓库进行检查，结果如下：
+
+| 检查项 | 实际结果 |
+|---|---|
+| Compose配置检查 | config --quiet通过 |
+| 本地.env忽略规则 | 已被Git忽略 |
+| JWT公私钥文件忽略规则 | 已被Git忽略 |
+| 已跟踪的.env、PEM和KEY文件 | 查询无输出 |
+| .env.example | 已被Git跟踪，敏感项使用占位符 |
+
+README补充了本地设置环境变量的方法。
+更新模板不会覆盖已有.env，也不会自动改变运行环境中的账号密码。
+
+### 关键结论
+
+仓库提交可复现的变量模板和非敏感配置，
+真实密码、密钥及Token保留在本地受控配置中。
+通过忽略规则与Git跟踪检查共同核验，
+避免将本地敏感文件纳入版本控制。
