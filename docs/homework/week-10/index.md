@@ -153,3 +153,64 @@ dev 与 test 分别读取不同 Data ID 和 Group 下的配置。
 
 本次验证的是环境切换后的启动读取，不属于动态刷新验证。
 Maven 自动测试使用独立 unit 环境，其测试结果另行据实记录。
+
+## 3. 动态配置验证
+
+### 实现思路
+
+教材服务新增独立业务配置 textbook-business-dev.yaml，
+开发 Group 为 CAMPUS_TEXTBOOK_CONFIG；
+测试演示配置为 textbook-business-test.yaml，
+Group 为 CAMPUS_TEXTBOOK_CONFIG_TEST。
+
+业务 Data ID 开启 refreshEnabled=true，
+StockWarningPolicy 使用 @RefreshScope 读取库存预警阈值和版本。
+原连接池 Data ID 保持启动时读取。
+
+新增库存预警判断预览接口，固定传入库存5，
+将阈值从3改为10，预期预警结果从false变为true。
+
+### 运行命令
+
+完成首次代码部署、服务健康后，在 Git Bash 执行：
+
+```bash
+CONFIG_MODE=dynamic CONFIG_PROFILE=dev bash scripts/config-test.sh
+echo "config-test exit code: $?"
+```
+
+脚本采集基线后，在 Nacos 将开发业务配置中的阈值改为10、
+版本改为v2并发布。期间不构建镜像、不重启或重建容器。
+
+### 验证结果
+
+在 dev 环境中运行 config-test.sh 的动态验证模式。
+采集基线后，在 Nacos 修改业务配置并发布：
+
+- Namespace：public
+- Group：CAMPUS_TEXTBOOK_CONFIG
+- Data ID：textbook-business-dev.yaml
+
+实际结果如下：
+
+| 验证项 | 修改前 | 修改后 | 结论 |
+|---|---|---|---|
+| 固定库存 | 5 | 5 | 输入保持一致 |
+| 库存预警阈值 | 3 | 10 | 动态生效 |
+| 配置版本 | v1 | v2 | 动态生效 |
+| 预警判断 | false | true | 业务判断随配置变化 |
+| 实例标识 instance | 基线实例 | 与基线一致 | 实例未改变 |
+| 进程号 pid | 1 | 1 | 保持一致 |
+| JVM启动时间 startedAt | 基线启动时间 | 与基线一致 | JVM未重启 |
+
+脚本输出 SAME_JVM，确认 instance、pid、startedAt 均保持不变。
+最终输出 ALL DYNAMIC CONFIG CHECKS PASSED，
+紧接着查询脚本退出码，结果为0。
+
+### 关键结论
+
+Nacos 发布配置后，教材服务在同一实例、同一 JVM 中读取到新阈值，
+库存预警判断随之改变，证明业务配置可以动态生效，
+无需重新打包或重启服务。
+
+本次验证针对库存预警业务参数，不将其结论扩展到连接池等其他配置。
