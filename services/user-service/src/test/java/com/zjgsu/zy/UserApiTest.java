@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Import;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
+@ActiveProfiles("unit")
 @Import(TestJwtKeys.class)
 class UserApiTest {
     @Autowired MockMvc mvc;

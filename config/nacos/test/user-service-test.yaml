@@ -1,0 +1,13 @@
+campus:
+  config:
+    marker: nacos-user-test-v1
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 2
+
+logging:
+  level:
+    com.zjgsu.zy: INFO

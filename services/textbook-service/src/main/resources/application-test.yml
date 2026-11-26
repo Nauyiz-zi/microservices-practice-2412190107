@@ -1,0 +1,10 @@
+spring:
+  config:
+    import:
+      - "nacos:textbook-service-test.yaml?group=CAMPUS_TEXTBOOK_CONFIG_TEST&refreshEnabled=false"
+      - "nacos:textbook-business-test.yaml?group=CAMPUS_TEXTBOOK_CONFIG_TEST&refreshEnabled=true"
+  cloud:
+    nacos:
+      config:
+        group: CAMPUS_TEXTBOOK_CONFIG_TEST
+        refresh-enabled: true

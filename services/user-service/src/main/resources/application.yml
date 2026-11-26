@@ -2,10 +2,18 @@ server:
   port: ${SERVER_PORT:8081}
 
 spring:
+  profiles:
+    default: dev
   application:
     name: user-service
   cloud:
     nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD}
+        namespace: ${NACOS_CONFIG_NAMESPACE:}
+        group: ${NACOS_CONFIG_GROUP:CAMPUS_TEXTBOOK_CONFIG}
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
         username: ${NACOS_USERNAME:nacos}

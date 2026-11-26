@@ -1,0 +1,8 @@
+spring:
+  config:
+    import:
+      - "nacos:user-service-dev.yaml?group=CAMPUS_TEXTBOOK_CONFIG&refreshEnabled=false"
+  cloud:
+    nacos:
+      config:
+        group: CAMPUS_TEXTBOOK_CONFIG

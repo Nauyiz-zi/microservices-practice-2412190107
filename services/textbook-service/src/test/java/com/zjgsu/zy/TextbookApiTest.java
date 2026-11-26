@@ -38,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
+@ActiveProfiles("unit")
 class TextbookApiTest {
     @Autowired MockMvc mvc;
     @Autowired RestTemplate rest;

@@ -19,7 +19,7 @@ import org.springframework.security.oauth2.jwt.*;
 @Configuration
 public class JwtConfig {
     @Bean
-    @Profile("!test")
+    @Profile("!unit")
     KeyPair jwtKeyPair(
             @Value("${auth.jwt.private-key}") Resource privatePem,
             @Value("${auth.jwt.public-key}") Resource publicPem) throws Exception {

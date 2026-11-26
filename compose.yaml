@@ -110,6 +110,7 @@ services:
       user-db:
         condition: service_healthy
     environment:
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
       SERVER_PORT: "8080"
       DB_URL: "jdbc:mysql://user-db:3306/campus_user?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
       DB_USERNAME: user_app
@@ -140,6 +141,7 @@ services:
       user-service:
         condition: service_healthy
     environment:
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
       SERVER_PORT: "8080"
       DB_URL: "jdbc:mysql://textbook-db:3306/campus_textbook?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
       DB_USERNAME: textbook_app

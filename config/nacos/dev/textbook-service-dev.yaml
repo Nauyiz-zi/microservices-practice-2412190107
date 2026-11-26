@@ -1,0 +1,11 @@
+campus:
+  config:
+    marker: nacos-textbook-dev-v1
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 8
+      minimum-idle: 2
+logging:
+  level:
+    com.zjgsu.zy: INFO

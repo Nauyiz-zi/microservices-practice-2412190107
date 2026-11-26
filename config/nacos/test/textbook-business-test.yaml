@@ -1,0 +1,4 @@
+campus:
+  business:
+    stock-warning-threshold: 3
+    revision: v1
