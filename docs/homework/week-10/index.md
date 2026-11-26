@@ -57,3 +57,99 @@ echo "config-test exit code: $?"
 验证过程中曾出现读取结果为 `local-unconfigured`、配置最大连接数为 `-1`、实际连接池使用默认值 `10` 的情况；启动日志提示两个 Data ID 的配置为空。核对并在 public 命名空间、正确 Group 下发布配置，再重启相关服务后，重新执行脚本通过。
 
 本步验证启动时集中读取，`refreshEnabled=false`。参数修改后需要重启相关服务；多环境隔离和动态变更验证将在后续小题完成，本节不将连接池参数描述为已支持热更新。
+
+## 2. 多环境配置
+
+### 实现思路
+
+用户服务和教材服务分别提供 dev、test 两套 Nacos 配置。
+dev 用于本地开发演示，test 用于测试演示。
+两套配置使用不同 Data ID 和 Group，并设置不同验证标记与连接池参数。
+
+开发配置使用 CAMPUS_TEXTBOOK_CONFIG，
+测试配置使用 CAMPUS_TEXTBOOK_CONFIG_TEST。
+完整 Data ID、Group 与用途见 docs/configuration.md。
+
+Compose 通过 APP_PROFILE 选择运行环境，默认 dev。
+application-dev.yml、application-test.yml 分别导入对应远程配置。
+
+原 Maven 自动测试环境改名为 unit，使用 H2、临时 JWT 密钥，
+关闭 Nacos Config 和服务发现，避免自动测试连接真实配置中心。
+
+dev/test 是同一套容器的顺序配置切换，演示数据库仍沿用现有数据库；
+unit 使用独立 H2，不将配置隔离描述为数据库隔离。
+
+### 运行命令
+
+先发布两份 test 配置，并运行两个服务的 Maven 测试及镜像构建。
+
+PowerShell 中切换到 test：
+
+```powershell
+$env:APP_PROFILE = "test"
+docker compose up -d --no-deps --force-recreate --scale user-service=2 user-service
+```
+
+等待用户服务 healthy 后执行：
+
+```powershell
+docker compose up -d --no-deps --force-recreate textbook-service
+```
+
+服务均 healthy 后，在 Git Bash 验证：
+
+```bash
+CONFIG_PROFILE=test \
+EXPECTED_USER_POOL=3 \
+EXPECTED_TEXTBOOK_POOL=4 \
+EXPECTED_USER_MARKER=nacos-user-test-v1 \
+EXPECTED_TEXTBOOK_MARKER=nacos-textbook-test-v1 \
+bash scripts/config-test.sh
+
+echo "config-test exit code: $?"
+```
+
+在原 PowerShell 窗口切回 dev：
+
+```powershell
+$env:APP_PROFILE = "dev"
+docker compose up -d --no-deps --force-recreate --scale user-service=2 user-service
+```
+
+等待用户服务 healthy 后执行：
+
+```powershell
+docker compose up -d --no-deps --force-recreate textbook-service
+```
+
+服务均 healthy 后，在 Git Bash 验证：
+
+```bash
+bash scripts/config-test.sh
+echo "config-test exit code: $?"
+```
+
+### 验证结果
+
+已在实际 Docker 环境中完成 test 环境验证，并切回 dev 再次验证。
+
+| 环境 | 服务 | 远程配置标记 | 配置最大连接数 | 实际最大连接数 | 实际最小空闲数 |
+|---|---|---|---:|---:|---:|
+| test | user-service | nacos-user-test-v1 | 3 | 3 | 2 |
+| test | textbook-service | nacos-textbook-test-v1 | 4 | 4 | 2 |
+| dev | user-service | nacos-user-dev-v1 | 7 | 7 | 2 |
+| dev | textbook-service | nacos-textbook-dev-v1 | 8 | 8 | 2 |
+
+两个环境下，网关健康检查、用户登录和配置读取接口均返回 HTTP 200。
+config-test.sh 校验运行环境、远程标记、配置值及实际 Hikari 参数，
+两次均输出 ALL CONFIG READ CHECKS PASSED。
+切回 dev 后立即查询脚本退出码，结果为 0。
+
+### 关键结论
+
+dev 与 test 分别读取不同 Data ID 和 Group 下的配置。
+切换运行 profile 并重建相关服务后，验证标记和实际连接池参数
+随环境正确变化，证明服务读取了所选环境的配置。
+
+本次验证的是环境切换后的启动读取，不属于动态刷新验证。
+Maven 自动测试使用独立 unit 环境，其测试结果另行据实记录。
